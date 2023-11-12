@@ -282,7 +282,7 @@ Ruckig is used by over hundred research labs, companies, and open-source project
 - [Frankx](https://github.com/pantor/frankx) for controlling the Franka Emika robot arm.
 - [Wiredworks](https://wiredworks.com) made a simple
   Kivy [GUI application](https://github.com/wiredworks/ruckig-showcase)
-- [rsruckig](https://github.com/)
+- [rsruckig](https://github.com/petrikosk/rsruckig)
 - and many others!
 
 ## Rust port TODOs
