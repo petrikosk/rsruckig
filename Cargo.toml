@@ -1,0 +1,23 @@
+[package]
+name = "rsruckig"
+authors = ["Petri Koskinen", "Lars Berscheid"]
+license-file = "LICENSE.txt"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+typenum = "1.13"
+arrayvec = "0.7.4"
+gnuplot = "0.0.39"
+float_eq = "1.0.1"
+rand_distr = "0.4.3"
+rand_pcg = "0.3.1"
+rand_core = "0.6.4"
+
+[lib]
+path = "src/rsruckig/mod.rs"
+
+[profile.release]
+lto = true
