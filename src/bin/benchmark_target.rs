@@ -120,12 +120,8 @@ fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usi
             dynamic_randomizer.fill_or_zero(&mut input.current_acceleration, 0.8);
             position_randomizer.fill(&mut input.target_position);
             dynamic_randomizer.fill_or_zero(&mut input.target_velocity, 0.7);
-
-            // Assuming OTGType is RuckigThrow, filling target_acceleration.
             dynamic_randomizer.fill_or_zero(&mut input.target_acceleration, 0.6);
 
-            // Using fill_with_offset for max_velocity and max_acceleration because
-            // fill_uniform is not defined in the previous Randomizer. Adjust as necessary.
             limit_randomizer.fill_with_offset(
                 &mut input.max_velocity,
                 &input.target_velocity, // pass a reference to target_velocity
@@ -135,11 +131,8 @@ fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usi
                 &input.target_acceleration, // pass a reference to target_acceleration
             );
 
-            // fill_normal is not a method in the previous Randomizer, assuming it should be fill.
             limit_randomizer.fill(&mut input.max_jerk);
 
-            // Perform the same validation as the C++ version.
-            // Assume validate_input method is correctly defined.
             if let Ok(false) = otg.validate_input::<ThrowErrorHandler>(&input, false, false, false)
             {
                 continue;
