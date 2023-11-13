@@ -6,12 +6,10 @@ use crate::util::integrate;
 #[derive(Clone, Default)]
 pub struct Trajectory {
     pub profiles: Vec<Vec<Profile>>,
-    // Using Vec<Vec<Profile>> instead of Container<Vector<Profile>>
     pub duration: f64,
     pub cumulative_times: Vec<f64>,
     pub independent_min_durations: Vec<f64>,
     position_extrema: Vec<PositionExtrema>,
-    // The type PositionExtrema is not defined in the provided C++ code
     degrees_of_freedom: usize,
     continue_calculation_counter: usize,
 }
@@ -154,8 +152,6 @@ impl Trajectory {
         self.degrees_of_freedom = dofs;
         self.duration = 0.0;
     }
-
-    // One possible way to implement at_time
 
     pub fn at_time(
         &self,
