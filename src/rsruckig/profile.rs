@@ -248,7 +248,6 @@ impl Profile {
             Direction::DOWN
         };
 
-        // Assuming v_precision is a constant or member of Profile
         (self.v.last().unwrap_or(&0.0) - self.vf).abs() < V_PRECISION
     }
 
@@ -757,9 +756,6 @@ impl Profile {
         }
     }
 
-    // Assuming `integrate` is something you've defined elsewhere in your Profile struct
-    // fn integrate(...) -> (f64, _, f64) { ... }
-
     pub fn get_position_extrema(&self) -> PositionExtrema {
         let mut extrema = PositionExtrema {
             min: f64::INFINITY,
@@ -767,9 +763,6 @@ impl Profile {
             t_min: 0.0,
             t_max: 0.0,
         };
-
-        // Assuming `brake` is a field of your Profile struct with attributes similar to:
-        // brake: Brake { duration: f64, t: [f64; SOME_SIZE], p: [f64; SOME_SIZE], ... }
 
         if self.brake.duration > 0.0 && self.brake.t[0] > 0.0 {
             Self::check_step_for_position_extremum(
@@ -839,7 +832,7 @@ impl Profile {
                 let _t = t;
 
                 if 0.0 < _t && _t <= self.t[i] {
-                    let time = offset + _t + if i > 0 { self.t_sum[i - 1] } else { 0.0 }; // assuming FloatOrd has a field .0 to get the inner f64
+                    let time = offset + _t + if i > 0 { self.t_sum[i - 1] } else { 0.0 };
                     let (_, vt, at) = integrate(_t, self.p[i], self.v[i], self.a[i], self.j[i]);
                     return Some((time, vt, at));
                 }
