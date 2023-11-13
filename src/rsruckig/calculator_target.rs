@@ -722,7 +722,7 @@ impl TargetCalculator {
                                     }
                                 }
                             },
-                            _ => {} // Handle other cases or panic, as per your needs
+                            _ => {}
                         }
 
                         p.limits = p_limiting.limits; // After check method call to set correct limits
@@ -779,7 +779,6 @@ impl TargetCalculator {
             let mut found_time_synchronization = false;
             match self.inp_per_dof_control_interface[dof] {
                 ControlInterface::Position => {
-                    // Assume Position{First,Second,Third}OrderStep2 structs are available in Rust
                     if !inp.max_jerk[dof].is_infinite() {
                         let mut step2 = PositionThirdOrderStep2::new(
                             t_profile,
@@ -821,7 +820,6 @@ impl TargetCalculator {
                     }
                 }
                 ControlInterface::Velocity => {
-                    // Assume Velocity{Second,Third}OrderStep2 structs are available in Rust
                     if !inp.max_jerk[dof].is_infinite() {
                         let mut step2 = VelocityThirdOrderStep2::new(
                             t_profile,
@@ -845,7 +843,7 @@ impl TargetCalculator {
                         found_time_synchronization = step2.get_profile(p);
                     }
                 }
-                _ => {} // Handle other cases or panic, as per your needs
+                _ => {} 
             }
 
             if !found_time_synchronization {
