@@ -34,7 +34,7 @@ cargo doc --open
 
 Let's get started!
 
-![Trajectory Profile](https://github.com/petrikosk/rsruckig/raw/master/doc/example_profile.jpg?raw=true)
+![Trajectory Profile](https://github.com/petrikosk/rsruckig/raw/master/doc/example_profile.png?raw=true)
 
 ### Waypoint-based Trajectory Generation
 
