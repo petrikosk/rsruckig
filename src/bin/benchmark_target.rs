@@ -7,6 +7,19 @@ use rsruckig::output_parameter::OutputParameter;
 use rsruckig::ruckig::Ruckig;
 use rsruckig::trajectory::Trajectory;
 use std::time::Instant;
+use gnuplot::{Figure, AxesCommon, Caption, Color, Tick};
+
+
+struct BenchmarkResults {
+    degrees_of_freedom: usize,
+    number_of_trajectories: i64,
+    average_mean: f64,
+    average_std: f64,
+    worst_mean: f64,
+    worst_std: f64,
+    global_mean: f64,
+    global_std: f64,
+}
 
 struct Randomizer<D>
 where
@@ -90,7 +103,7 @@ fn analyse(v: &Vec<f64>) -> (f64, f64) {
     (mean, std_deviation)
 }
 
-fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usize, verbose: bool) {
+fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usize, verbose: bool) -> BenchmarkResults {
     let mut otg = Ruckig::new(degrees_of_freedom, 0.005, true);
 
     let position_dist = Normal::new(0.0, 4.0).unwrap();
@@ -174,6 +187,52 @@ fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usi
             global_mean, global_std
         );
     }
+    BenchmarkResults {
+        degrees_of_freedom,
+        number_of_trajectories,
+        average_mean,
+        average_std,
+        worst_mean,
+        worst_std,
+        global_mean,
+        global_std,
+    }
+}
+
+fn plot_benchmark_results(benchmark_results: BenchmarkResults) {
+    let mut fg = Figure::new();
+
+    // Data for the bar chart
+    let metrics = ["Average", "Worst", "Global"];
+    let means = [benchmark_results.average_mean, benchmark_results.worst_mean, benchmark_results.global_mean];
+    let std_devs = [benchmark_results.average_std, benchmark_results.worst_std, benchmark_results.global_std];
+    let positions: Vec<f64> = (0..metrics.len()).map(|x| x as f64).collect();
+
+    // Creating custom ticks for the x-axis
+    let custom_ticks: Vec<Tick<f64, String>> = positions.iter().zip(metrics.iter())
+        .map(|(&pos, &label)| Tick::Major(pos, gnuplot::Fix(label.to_string())))
+        .collect();
+
+    fg.axes2d()
+        .set_title(
+            &format!("Benchmark for {} DoFs on {} trajectories", benchmark_results.degrees_of_freedom, benchmark_results.number_of_trajectories),
+            &[]
+        )
+        .set_x_label("Metrics", &[])
+        .set_y_label("Duration (µs)", &[])
+        .set_x_ticks_custom(custom_ticks.iter(), &[], &[])
+        .boxes(
+            positions.iter(),
+            means.iter(),
+            &[Caption("Mean"), Color("blue")]
+        )
+        .y_error_lines(
+            positions.iter(),
+            means.iter(),
+            std_devs.iter(),
+            &[Caption("Std Dev"), Color("red")]
+        );
+    fg.show().unwrap();
 }
 
 fn main() {
@@ -181,5 +240,6 @@ fn main() {
     let number_of_trajectories = 4 * 64 * 1024;
 
     let dofs = 3;
-    benchmark(&mut n, number_of_trajectories, dofs, true);
+    let results = benchmark(&mut n, number_of_trajectories, dofs, true);
+    plot_benchmark_results(results);
 }

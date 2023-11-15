@@ -25,11 +25,16 @@ accepted for the *Robotics: Science and Systems (RSS), 2021* conference.
 cargo build --release
 ```
 
+## Documentation (incomplete)
+```bash
+cargo doc --open
+```
+
 ## Tutorial
 
 Let's get started!
 
-![Trajectory Profile](https://github.com/pantor/ruckig/raw/master/doc/example_profile.png?raw=true)
+![Trajectory Profile](https://github.com/petrikosk/rsruckig/raw/master/doc/example_profile.jpg?raw=true)
 
 ### Waypoint-based Trajectory Generation
 
@@ -67,7 +72,7 @@ hardware.
 ```.rs
 while ruckig.update(&input, &mut output).unwrap() == RuckigResult::Working {
   // Make use of the new state here!
-  // e.g. robot->setJointPositions(output.new_position);
+  // e.g. robo.setJointPositions(output.new_position);
 
   output.pass_to_input(&mut input); // Don't forget this!
 }
