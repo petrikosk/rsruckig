@@ -847,20 +847,20 @@ impl TargetCalculator {
             }
 
             if !found_time_synchronization {
-                if throw_error {
-                    panic!(
+                return if throw_error {
+                    Err(RuckigError::new(format!(
                         "error in step 2 in dof: {} for t sync: {} input: {}",
                         dof,
                         traj.duration,
                         inp
-                    );
+                    )))
                 } else {
-                    return Ok(RuckigResult::ErrorSynchronizationCalculation);
+                    Ok(RuckigResult::ErrorSynchronizationCalculation)
                 }
             }
 
             // Uncomment the following line if you want to debug
-            // println!("{} profile step2: {}", dof, /* some method to convert p to string */);
+            // println!("{} profile step2: {}", dof, p.to_string());
         }
 
         Ok(RuckigResult::Working)
