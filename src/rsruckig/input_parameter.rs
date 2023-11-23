@@ -340,7 +340,7 @@ impl InputParameter {
 }
 
 impl fmt::Display for InputParameter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
             "\ninp.current_position = [{}]",
