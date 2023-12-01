@@ -46,7 +46,7 @@ impl OutputParameter {
 }
 
 impl fmt::Display for OutputParameter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
             "\nout.new_position = [{}]",

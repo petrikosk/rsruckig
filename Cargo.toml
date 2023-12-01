@@ -2,13 +2,19 @@
 name = "rsruckig"
 authors = ["Petri Koskinen", "Lars Berscheid"]
 license-file = "LICENSE.txt"
+readme = "README.md"
 version = "0.1.0"
 edition = "2021"
+description = "Ruckig motion planning library for Rust"
+keywords = ["motion", "trajectory", "planning", "robotics", "automation"]
+categories = ["science::robotics", "mathematics"]
+homepage = "https://ruckig.com/"
+repository = "https://github.com/petrikosk/rsruckig"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-typenum = "1.13"
+typenum = "1.17"
 arrayvec = "0.7.4"
 gnuplot = "0.0.39"
 float_eq = "1.0.1"
