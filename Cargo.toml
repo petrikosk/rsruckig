@@ -1,7 +1,7 @@
 [package]
 name = "rsruckig"
 authors = ["Petri Koskinen", "Lars Berscheid"]
-license-file = "LICENSE.txt"
+license = "MIT"
 readme = "README.md"
 version = "0.1.0"
 edition = "2021"
