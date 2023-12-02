@@ -1,0 +1,24 @@
+[package]
+name = "rsruckig-samples"
+version = "0.1.0"
+authors = ["Petri Koskinen"]
+edition = "2021"
+
+[[bin]]
+name = "example_position_1dof"
+path = "src/example_position_1dof.rs"
+
+[[bin]]
+name = "example_position_3dof"
+path = "src/example_position_3dof.rs"
+
+[[bin]]
+name = "example_velocity_1dof"
+path = "src/example_velocity_1dof.rs"
+
+[dependencies]
+gnuplot = "0.0.39"
+
+[dependencies.rsruckig]
+path = "../lib"
+version = "0.1.2"

@@ -1,0 +1,16 @@
+[package]
+name = "rsruckig_test_suite"
+version = "0.1.0"
+authors = ["Petri Koskinen"]
+edition = "2021"
+publish = false
+
+[dependencies.rsruckig]
+path = "../lib"
+version = "0.1.2"
+
+[dev-dependencies]
+float_eq = "1.0.1"
+rand_distr = "0.4.3"
+rand_pcg = "0.3.1"
+rand_core = "0.6.4"

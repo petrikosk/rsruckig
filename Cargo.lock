@@ -131,15 +131,40 @@ dependencies = [
 
 [[package]]
 name = "rsruckig"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "arrayvec",
- "float_eq",
+ "typenum",
+]
+
+[[package]]
+name = "rsruckig-benchmarks"
+version = "0.1.0"
+dependencies = [
  "gnuplot",
  "rand_core",
  "rand_distr",
  "rand_pcg",
- "typenum",
+ "rsruckig",
+]
+
+[[package]]
+name = "rsruckig-samples"
+version = "0.1.0"
+dependencies = [
+ "gnuplot",
+ "rsruckig",
+]
+
+[[package]]
+name = "rsruckig_test_suite"
+version = "0.1.0"
+dependencies = [
+ "float_eq",
+ "rand_core",
+ "rand_distr",
+ "rand_pcg",
+ "rsruckig",
 ]
 
 [[package]]
