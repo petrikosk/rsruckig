@@ -8,6 +8,7 @@ use crate::result::RuckigResult;
 use std::time::Instant;
 use crate::trajectory::Trajectory;
 
+#[derive(Default)]
 pub struct Ruckig {
     throw_error: bool,
     current_input: InputParameter,

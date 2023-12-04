@@ -18,6 +18,7 @@ use crate::{
 };
 use crate::error::RuckigError;
 
+#[derive(Default)]
 pub struct TargetCalculator {
     eps: f64,
     return_error_at_maximal_duration: bool,
