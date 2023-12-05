@@ -19,14 +19,14 @@ impl fmt::Display for RuckigError {
     }
 }
 
-impl std::fmt::Debug for RuckigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for RuckigError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "RuckigError: {}", self.message)
     }
 }
 
-/// Trait for handling validation errors.
-/// Types that implement this trait decide how to respond to validation errors.
+/// Trait for handling validation and calculator errors.
+/// Types that implement this trait decide how to respond to validation and calculator errors.
 pub trait RuckigErrorHandler {
     fn handle_validation_error(message: &str) -> Result<bool, RuckigError>;
     fn handle_calculator_error(
@@ -35,6 +35,7 @@ pub trait RuckigErrorHandler {
     ) -> Result<RuckigResult, RuckigError>;
 }
 
+#[derive(Default)]
 pub struct ThrowErrorHandler;
 
 impl RuckigErrorHandler for ThrowErrorHandler {
@@ -49,6 +50,7 @@ impl RuckigErrorHandler for ThrowErrorHandler {
     }
 }
 
+#[derive(Default)]
 pub struct IgnoreErrorHandler;
 
 impl RuckigErrorHandler for IgnoreErrorHandler {

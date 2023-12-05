@@ -44,11 +44,24 @@ First, you'll need to create a Ruckig instance with the ```RuckigErrorHandler```
 e.g. in seconds) in the constructor.
 
 ```.rs
+use rsruckig::prelude::*;
+
 let mut ruckig = Ruckig::<ThrowErrorHandler>::new(6, 0.01); // Number DoFs; control cycle in [s]
 ```
-Possible error handlers are:
+Implemented error handlers are:
 - ```ThrowErrorHandler``` - throws an error with a detailed reason if an input is not valid.
 - ```IgnoreErrorHandler``` - ignores the error and returns ```Ok(RuckigResult)```.
+
+To implement your own error handler, you need to implement the ```RuckigErrorHandler``` trait:
+```.rs
+pub trait RuckigErrorHandler {
+    fn handle_validation_error(message: &str) -> Result<bool, RuckigError>;
+    fn handle_calculator_error(
+        message: &str,
+        result: RuckigResult,
+    ) -> Result<RuckigResult, RuckigError>;
+}
+```
 
 The input type has 3 blocks of data: the *current* state, the *target* state and the corresponding kinematic *limits*.
 
