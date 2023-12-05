@@ -1,12 +1,9 @@
 use gnuplot::Coordinate::Graph;
 use gnuplot::{AxesCommon, Caption, Figure};
-use rsruckig::{
-    input_parameter::InputParameter, output_parameter::OutputParameter, result::RuckigResult,
-    ruckig::Ruckig,
-};
+use rsruckig::prelude::*;
 
 fn main() {
-    let mut otg = Ruckig::new(3, 0.01, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.01);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
 

@@ -131,7 +131,7 @@ dependencies = [
 
 [[package]]
 name = "rsruckig"
-version = "0.1.2"
+version = "1.0.0"
 dependencies = [
  "arrayvec",
 ]

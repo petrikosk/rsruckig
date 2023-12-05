@@ -1,4 +1,4 @@
-use crate::error::RuckigError;
+use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::util::join;
 use std::fmt;
 use std::ops::Deref;
@@ -110,30 +110,23 @@ impl InputParameter {
     }
 
     /// Validate the input for trajectory calculation
-    pub fn validate(
+    pub fn validate<E: RuckigErrorHandler>(
         &self,
-        throw_validation_error: bool,
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<bool, RuckigError> {
         for dof in 0..self.degrees_of_freedom {
             let j_max = self.max_jerk[dof];
             if j_max.is_nan() || j_max < 0.0 {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!(
-                        "Maximum jerk limit {} of DoF {} should be larger than or equal to zero.",
-                        j_max, dof
-                    )));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!(
+                    "Maximum jerk limit {} of DoF {} should be larger than or equal to zero.",
+                    j_max, dof
+                ));
             }
 
             let a_max: f64 = self.max_acceleration[dof];
             if a_max.is_nan() || a_max < 0.0 {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!("maximum acceleration limit {} of DoF {} should be larger than or equal to zero.", a_max, dof)));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!("maximum acceleration limit {} of DoF {} should be larger than or equal to zero.", a_max, dof));
             }
 
             let a_min: f64 = match &self.min_acceleration {
@@ -141,82 +134,55 @@ impl InputParameter {
                 None => -self.max_acceleration.deref()[dof],
             };
             if a_min.is_nan() || a_min > 0.0 {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!("minimum acceleration limit {} of DoF {} should be smaller than or equal to zero.", a_min, dof)));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!("minimum acceleration limit {} of DoF {} should be smaller than or equal to zero.", a_min, dof));
             }
 
             let a0: f64 = self.current_acceleration[dof];
             if a0.is_nan() {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!(
-                        "current acceleration {} of DoF {} should be a valid number.",
-                        a0, dof
-                    )));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!(
+                    "current acceleration {} of DoF {} should be a valid number.",
+                    a0, dof
+                ));
             }
 
             let af: f64 = self.target_acceleration[dof];
             if af.is_nan() {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!(
-                        "target acceleration {} of DoF {} should be a valid number.",
-                        af, dof
-                    )));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!(
+                    "target acceleration {} of DoF {} should be a valid number.",
+                    af, dof
+                ));
             }
 
             if check_current_state_within_limits {
                 if a0 > a_max {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!("current acceleration {} of DoF {} exceeds its maximum acceleration limit {}.", a0, dof, a_max)));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!("current acceleration {} of DoF {} exceeds its maximum acceleration limit {}.", a0, dof, a_max));
                 }
                 if a0 < a_min {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!("current acceleration {} of DoF {} undercuts its minimum acceleration limit {}.", a0, dof, a_min)));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!("current acceleration {} of DoF {} undercuts its minimum acceleration limit {}.", a0, dof, a_min));
                 }
             }
             if check_target_state_within_limits {
                 if af > a_max {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!("target acceleration {} of DoF {} exceeds its maximum acceleration limit {}.", af, dof, a_max)));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!("target acceleration {} of DoF {} exceeds its maximum acceleration limit {}.", af, dof, a_max));
                 }
                 if af < a_min {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!("target acceleration {} of DoF {} undercuts its minimum acceleration limit {}.", af, dof, a_min)));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!("target acceleration {} of DoF {} undercuts its minimum acceleration limit {}.", af, dof, a_min));
                 }
             }
 
             let v0 = self.current_velocity[dof];
             if v0.is_nan() {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!(
-                        "current velocity {} of DoF {} should be a valid number.",
-                        v0, dof
-                    )));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!(
+                    "current velocity {} of DoF {} should be a valid number.",
+                    v0, dof
+                ));
             }
             let vf = self.target_velocity[dof];
             if vf.is_nan() {
-                if throw_validation_error {
-                    return Err(RuckigError::new(format!(
-                        "target velocity {} of DoF {} should be a valid number.",
-                        vf, dof
-                    )));
-                }
-                return Ok(false);
+                return E::handle_validation_error(&format!(
+                    "target velocity {} of DoF {} should be a valid number.",
+                    vf, dof
+                ));
             }
 
             let control_interface_ = match &self.per_dof_control_interface {
@@ -230,31 +196,22 @@ impl InputParameter {
             if let ControlInterface::Position = control_interface_ {
                 let p0 = self.current_position[dof];
                 if p0.is_nan() {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!(
-                            "current position {} of DoF {} should be a valid number.",
-                            p0, dof
-                        )));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!(
+                        "current position {} of DoF {} should be a valid number.",
+                        p0, dof
+                    ));
                 }
                 let pf = self.target_position[dof];
                 if pf.is_nan() {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!(
-                            "target position {} of DoF {} should be a valid number.",
-                            pf, dof
-                        )));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!(
+                        "target position {} of DoF {} should be a valid number.",
+                        pf, dof
+                    ));
                 }
 
                 let v_max = self.max_velocity[dof];
                 if v_max.is_nan() || v_max < 0.0 {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!("maximum velocity limit {} of DoF {} should be larger than or equal to zero.", v_max, dof)));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!("maximum velocity limit {} of DoF {} should be larger than or equal to zero.", v_max, dof));
                 }
 
                 let v_min = if let Some(min_velocity) = &self.min_velocity {
@@ -263,74 +220,56 @@ impl InputParameter {
                     -v_max
                 };
                 if v_min.is_nan() || v_min > 0.0 {
-                    if throw_validation_error {
-                        return Err(RuckigError::new(format!("minimum velocity limit {} of DoF {} should be smaller than or equal to zero.", v_min, dof)));
-                    }
-                    return Ok(false);
+                    return E::handle_validation_error(&format!("minimum velocity limit {} of DoF {} should be smaller than or equal to zero.", v_min, dof));
                 }
 
                 if check_current_state_within_limits {
                     if v0 > v_max {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("current velocity {} of DoF {} exceeds its maximum velocity limit {}.", v0, dof, v_max)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!(
+                            "current velocity {} of DoF {} exceeds its maximum velocity limit {}.",
+                            v0, dof, v_max
+                        ));
                     }
                     if v0 < v_min {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("current velocity {} of DoF {} undercuts its minimum velocity limit {}.", v0, dof, v_min)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!("current velocity {} of DoF {} undercuts its minimum velocity limit {}.", v0, dof, v_min));
                     }
                 }
                 if check_target_state_within_limits {
                     if vf > v_max {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("target velocity {} of DoF {} exceeds its maximum velocity limit {}.", vf, dof, v_max)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!(
+                            "target velocity {} of DoF {} exceeds its maximum velocity limit {}.",
+                            vf, dof, v_max
+                        ));
                     }
                     if vf < v_min {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("target velocity {} of DoF {} undercuts its minimum velocity limit {}.", vf, dof, v_min)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!(
+                            "target velocity {} of DoF {} undercuts its minimum velocity limit {}.",
+                            vf, dof, v_min
+                        ));
                     }
                 }
                 if check_current_state_within_limits {
                     if a0 > 0.0 && j_max > 0.0 && InputParameter::v_at_a_zero(v0, a0, j_max) > v_max
                     {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, j_max), v_max)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, j_max), v_max));
                     }
                     if a0 < 0.0
                         && j_max > 0.0
                         && InputParameter::v_at_a_zero(v0, a0, -j_max) < v_min
                     {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, -j_max), v_min)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, -j_max), v_min));
                     }
                 }
                 if check_target_state_within_limits {
                     if af < 0.0 && j_max > 0.0 && InputParameter::v_at_a_zero(vf, af, j_max) > v_max
                     {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, j_max), v_max)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, j_max), v_max));
                     }
                     if af > 0.0
                         && j_max > 0.0
                         && InputParameter::v_at_a_zero(vf, af, -j_max) < v_min
                     {
-                        if throw_validation_error {
-                            return Err(RuckigError::new(format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, -j_max), v_min)));
-                        }
-                        return Ok(false);
+                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, -j_max), v_min));
                     }
                 }
             }

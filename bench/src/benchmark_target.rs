@@ -1,14 +1,10 @@
+use gnuplot::{AxesCommon, Caption, Color, Figure, Tick};
 use rand_core::SeedableRng;
 use rand_distr::{Distribution, Normal, Uniform};
 use rand_pcg::Pcg64Mcg;
-use rsruckig::error::ThrowErrorHandler;
-use rsruckig::input_parameter::InputParameter;
-use rsruckig::output_parameter::OutputParameter;
-use rsruckig::ruckig::Ruckig;
-use rsruckig::trajectory::Trajectory;
+use rsruckig::error::RuckigErrorHandler;
+use rsruckig::prelude::*;
 use std::time::Instant;
-use gnuplot::{Figure, AxesCommon, Caption, Color, Tick};
-
 
 struct BenchmarkResults {
     degrees_of_freedom: usize,
@@ -73,13 +69,13 @@ where
     }
 }
 
-fn _check_update(otg: &mut Ruckig, input: &InputParameter) -> f64 {
+fn _check_update<E: RuckigErrorHandler>(otg: &mut Ruckig<E>, input: &InputParameter) -> f64 {
     let mut output = OutputParameter::new(input.degrees_of_freedom);
     let _result = otg.update(input, &mut output);
     output.calculation_duration
 }
 
-fn check_calculation(otg: &mut Ruckig, input: &InputParameter) -> f64 {
+fn check_calculation<E: RuckigErrorHandler>(otg: &mut Ruckig<E>, input: &InputParameter) -> f64 {
     let mut traj = Trajectory::new(input.degrees_of_freedom);
     let start = Instant::now();
     let _result = otg.calculate(input, &mut traj);
@@ -103,8 +99,13 @@ fn analyse(v: &Vec<f64>) -> (f64, f64) {
     (mean, std_deviation)
 }
 
-fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usize, verbose: bool) -> BenchmarkResults {
-    let mut otg = Ruckig::new(degrees_of_freedom, 0.005, true);
+fn benchmark(
+    n: &mut usize,
+    number_of_trajectories: i64,
+    degrees_of_freedom: usize,
+    verbose: bool,
+) -> BenchmarkResults {
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(degrees_of_freedom, 0.005);
 
     let position_dist = Normal::new(0.0, 4.0).unwrap();
     let dynamic_dist = Normal::new(0.0, 0.8).unwrap();
@@ -146,8 +147,7 @@ fn benchmark(n: &mut usize, number_of_trajectories: i64, degrees_of_freedom: usi
 
             limit_randomizer.fill(&mut input.max_jerk);
 
-            if let Ok(false) = otg.validate_input::<ThrowErrorHandler>(&input, false, false, false)
-            {
+            if let Ok(false) = otg.validate_input(&input, false, false) {
                 continue;
             }
 
@@ -204,19 +204,32 @@ fn plot_benchmark_results(benchmark_results: BenchmarkResults) {
 
     // Data for the bar chart
     let metrics = ["Average", "Worst", "Global"];
-    let means = [benchmark_results.average_mean, benchmark_results.worst_mean, benchmark_results.global_mean];
-    let std_devs = [benchmark_results.average_std, benchmark_results.worst_std, benchmark_results.global_std];
+    let means = [
+        benchmark_results.average_mean,
+        benchmark_results.worst_mean,
+        benchmark_results.global_mean,
+    ];
+    let std_devs = [
+        benchmark_results.average_std,
+        benchmark_results.worst_std,
+        benchmark_results.global_std,
+    ];
     let positions: Vec<f64> = (0..metrics.len()).map(|x| x as f64).collect();
 
     // Creating custom ticks for the x-axis
-    let custom_ticks: Vec<Tick<f64, String>> = positions.iter().zip(metrics.iter())
+    let custom_ticks: Vec<Tick<f64, String>> = positions
+        .iter()
+        .zip(metrics.iter())
         .map(|(&pos, &label)| Tick::Major(pos, gnuplot::Fix(label.to_string())))
         .collect();
 
     fg.axes2d()
         .set_title(
-            &format!("Benchmark for {} DoFs on {} trajectories", benchmark_results.degrees_of_freedom, benchmark_results.number_of_trajectories),
-            &[]
+            &format!(
+                "Benchmark for {} DoFs on {} trajectories",
+                benchmark_results.degrees_of_freedom, benchmark_results.number_of_trajectories
+            ),
+            &[],
         )
         .set_x_label("Metrics", &[])
         .set_y_label("Duration (µs)", &[])
@@ -224,13 +237,13 @@ fn plot_benchmark_results(benchmark_results: BenchmarkResults) {
         .boxes(
             positions.iter(),
             means.iter(),
-            &[Caption("Mean"), Color("blue")]
+            &[Caption("Mean"), Color("blue")],
         )
         .y_error_lines(
             positions.iter(),
             means.iter(),
             std_devs.iter(),
-            &[Caption("Std Dev"), Color("red")]
+            &[Caption("Std Dev"), Color("red")],
         );
     fg.show().unwrap();
 }

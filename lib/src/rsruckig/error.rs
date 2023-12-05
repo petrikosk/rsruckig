@@ -1,3 +1,4 @@
+use crate::result::RuckigResult;
 use std::fmt;
 
 pub struct RuckigError {
@@ -26,22 +27,38 @@ impl std::fmt::Debug for RuckigError {
 
 /// Trait for handling validation errors.
 /// Types that implement this trait decide how to respond to validation errors.
-pub trait ValidationErrorHandler {
-    fn handle_error(message: &str) -> Result<bool, RuckigError>;
+pub trait RuckigErrorHandler {
+    fn handle_validation_error(message: &str) -> Result<bool, RuckigError>;
+    fn handle_calculator_error(
+        message: &str,
+        result: RuckigResult,
+    ) -> Result<RuckigResult, RuckigError>;
 }
 
 pub struct ThrowErrorHandler;
 
-impl ValidationErrorHandler for ThrowErrorHandler {
-    fn handle_error(message: &str) -> Result<bool, RuckigError> {
+impl RuckigErrorHandler for ThrowErrorHandler {
+    fn handle_validation_error(message: &str) -> Result<bool, RuckigError> {
         Err(RuckigError::new(message.to_string()))
+    }
+    fn handle_calculator_error(
+        message: &str,
+        result: RuckigResult,
+    ) -> Result<RuckigResult, RuckigError> {
+        Err(RuckigError::new(format!("{}: {:?}", message, result)))
     }
 }
 
 pub struct IgnoreErrorHandler;
 
-impl ValidationErrorHandler for IgnoreErrorHandler {
-    fn handle_error(_message: &str) -> Result<bool, RuckigError> {
+impl RuckigErrorHandler for IgnoreErrorHandler {
+    fn handle_validation_error(_message: &str) -> Result<bool, RuckigError> {
         Ok(false)
+    }
+    fn handle_calculator_error(
+        _message: &str,
+        result: RuckigResult,
+    ) -> Result<RuckigResult, RuckigError> {
+        Ok(result)
     }
 }

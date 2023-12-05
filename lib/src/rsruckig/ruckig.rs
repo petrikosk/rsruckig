@@ -1,32 +1,39 @@
 //! Main implementation for the Ruckig algorithm.
 
 use crate::calculator_target::TargetCalculator;
-use crate::error::{RuckigError, ThrowErrorHandler, ValidationErrorHandler};
+use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::input_parameter::{DurationDiscretization, InputParameter};
 use crate::output_parameter::OutputParameter;
 use crate::result::RuckigResult;
-use std::time::Instant;
 use crate::trajectory::Trajectory;
+use std::marker::PhantomData;
+use std::time::Instant;
 
-#[derive(Default)]
-pub struct Ruckig {
-    throw_error: bool,
+pub struct Ruckig<E: RuckigErrorHandler> {
     current_input: InputParameter,
     current_input_initialized: bool,
     pub calculator: TargetCalculator,
     pub degrees_of_freedom: usize,
     pub delta_time: f64,
+    _error_handler: PhantomData<E>,
 }
 
-impl Ruckig {
-    pub fn new(degrees_of_freedom: usize, delta_time: f64, throw_error: bool) -> Self {
+impl<E: RuckigErrorHandler> Ruckig<E> {
+    #[allow(dead_code)]
+    fn default() -> Self {
+        Self::new(1, 0.01)
+    }
+}
+
+impl<E: RuckigErrorHandler> Ruckig<E> {
+    pub fn new(degrees_of_freedom: usize, delta_time: f64) -> Self {
         Self {
             current_input: InputParameter::new(degrees_of_freedom),
             current_input_initialized: false,
             calculator: TargetCalculator::new(degrees_of_freedom),
             degrees_of_freedom,
             delta_time,
-            throw_error,
+            _error_handler: PhantomData,
         }
     }
 
@@ -35,15 +42,13 @@ impl Ruckig {
     }
 
     /// Validate the input as well as the Ruckig instance for trajectory calculation
-    pub fn validate_input<T: ValidationErrorHandler>(
+    pub fn validate_input(
         &self,
         input: &InputParameter,
-        throw_validation_error: bool,
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<bool, RuckigError> {
-        if !input.validate(
-            throw_validation_error,
+        if !input.validate::<E>(
             check_current_state_within_limits,
             check_target_state_within_limits,
         )? {
@@ -53,7 +58,7 @@ impl Ruckig {
         if self.delta_time <= 0.0
             && input.duration_discretization != DurationDiscretization::Continuous
         {
-            return T::handle_error(&format!(
+            return E::handle_validation_error(&format!(
                 "delta time (control rate) parameter {} should be larger than zero.",
                 self.delta_time
             ));
@@ -62,20 +67,14 @@ impl Ruckig {
         Ok(true)
     }
 
-    pub fn calculate(&mut self, input: &InputParameter, traj: &mut Trajectory) -> Result<RuckigResult, RuckigError> {
-        self.validate_input::<ThrowErrorHandler>(
-            input,
-            self.throw_error,
-            false,
-            true,
-        )?;
+    pub fn calculate(
+        &mut self,
+        input: &InputParameter,
+        traj: &mut Trajectory,
+    ) -> Result<RuckigResult, RuckigError> {
+        self.validate_input(input, false, true)?;
 
-        self.calculator.calculate(
-            input,
-            traj,
-            self.delta_time,
-            self.throw_error,
-        )
+        self.calculator.calculate::<E>(input, traj, self.delta_time)
     }
 
     pub fn update(
@@ -85,20 +84,21 @@ impl Ruckig {
     ) -> Result<RuckigResult, RuckigError> {
         let start = Instant::now();
 
-        if self.degrees_of_freedom == 0 && self.throw_error && (self.degrees_of_freedom != input.degrees_of_freedom || self.degrees_of_freedom != output.degrees_of_freedom) {
-            return Err(RuckigError::new(
-                "mismatch in degrees of freedom (vector size).".to_string(),
-            ));
+        if self.degrees_of_freedom == 0
+            && (self.degrees_of_freedom != input.degrees_of_freedom
+                || self.degrees_of_freedom != output.degrees_of_freedom)
+        {
+            return E::handle_calculator_error(
+                "mismatch in degrees of freedom (vector size).",
+                RuckigResult::Error,
+            );
         }
 
         output.new_calculation = false;
 
         let result = Ok(RuckigResult::Working);
         if !self.current_input_initialized || *input != self.current_input {
-            self.calculate(
-                input,
-                &mut output.trajectory,
-            )?;
+            self.calculate(input, &mut output.trajectory)?;
 
             self.current_input = input.clone();
             self.current_input_initialized = true;

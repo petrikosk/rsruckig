@@ -1,7 +1,4 @@
-use rsruckig::{
-input_parameter::InputParameter, output_parameter::OutputParameter, result::RuckigResult,
-ruckig::Ruckig,
-};
+use rsruckig::prelude::*;
 
 use float_eq::assert_float_eq;
 use rsruckig::input_parameter::{ControlInterface, DurationDiscretization, Synchronization};
@@ -9,24 +6,33 @@ use rsruckig::trajectory::Trajectory;
 
 fn almost_equal_vecs(a: &[f64], b: &[f64], epsilon: f64) -> bool {
     if a.len() != b.len() {
-        panic!("Length mismatch: left vector has length {}, right vector has length {}", a.len(), b.len());
+        panic!(
+            "Length mismatch: left vector has length {}, right vector has length {}",
+            a.len(),
+            b.len()
+        );
     }
 
     for (i, (x, y)) in a.iter().zip(b.iter()).enumerate() {
         if (x - y).abs() > epsilon {
-            panic!("Values at index {} differ: left = {}, right = {}, difference = {}", i, x, y, (x - y).abs());
+            panic!(
+                "Values at index {} differ: left = {}, right = {}, difference = {}",
+                i,
+                x,
+                y,
+                (x - y).abs()
+            );
         }
     }
 
     true
 }
 
-
 #[test]
 // Single DOF
 fn test_at_time() {
     // Setup
-    let mut otg = Ruckig::new(1, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(1, 0.005);
     let mut input = InputParameter::new(1);
     input.current_position = vec![0.0];
     input.target_position = vec![1.0];
@@ -49,10 +55,24 @@ fn test_at_time() {
     let mut new_position = vec![0.0; 1];
     let mut new_velocity = vec![0.0; 1];
     let mut new_acceleration = vec![0.0; 1];
-    traj.at_time(0.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        0.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
     assert_float_eq!(new_position[0], input.current_position[0], abs <= 0.000_1);
 
-    traj.at_time(3.1748 / 2.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        3.1748 / 2.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
     assert_float_eq!(new_position[0], 0.5, abs <= 0.000_1);
 }
 
@@ -60,7 +80,7 @@ fn test_at_time() {
 #[test]
 fn test_secondary() {
     // Setup
-    let mut otg = Ruckig::new(3, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
 
@@ -92,32 +112,80 @@ fn test_secondary() {
     let mut new_acceleration = vec![0.0; 3];
     let mut new_jerk = vec![0.0; 3];
 
-    output.trajectory.at_time(0.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    output.trajectory.at_time(
+        0.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
     assert_eq!(new_position, input.current_position);
     assert_eq!(new_velocity, input.current_velocity);
     assert_eq!(new_acceleration, input.current_acceleration);
 
     let mut new_section: Option<usize> = None;
 
-    output.trajectory.at_time(output.trajectory.get_duration(), &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
-    assert!(almost_equal_vecs(&new_position, &input.target_position, 0.000_1));
-    assert!(almost_equal_vecs(&new_velocity, &input.target_velocity, 0.000_1));
-    assert!(almost_equal_vecs(&new_acceleration, &input.target_acceleration, 0.000_1));
+    output.trajectory.at_time(
+        output.trajectory.get_duration(),
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
+    assert!(almost_equal_vecs(
+        &new_position,
+        &input.target_position,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &new_velocity,
+        &input.target_velocity,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &new_acceleration,
+        &input.target_acceleration,
+        0.000_1
+    ));
 
-    output.trajectory.at_time(2.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut Some(&mut new_jerk), &mut new_section);
+    output.trajectory.at_time(
+        2.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut Some(&mut new_jerk),
+        &mut new_section,
+    );
 
-    assert!(almost_equal_vecs(&new_position, &[0.5, -2.6871268303003437, 1.0], 0.000_1));
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.5, -2.6871268303003437, 1.0],
+        0.000_1
+    ));
     assert_eq!(new_jerk, vec![0.0, 0.0, -1.0]);
     assert_eq!(new_section, Some(0));
 
-    output.trajectory.at_time(5.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut Some(&mut new_jerk), &mut new_section);
+    output.trajectory.at_time(
+        5.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut Some(&mut new_jerk),
+        &mut new_section,
+    );
     assert_eq!(new_jerk, vec![0.0, 0.0, 0.0]);
     assert_eq!(new_section, Some(1));
 
     let independent_min_durations = output.trajectory.get_independent_min_durations();
     assert_float_eq!(independent_min_durations[0], 3.1748021039, abs <= 0.000_1);
     assert_float_eq!(independent_min_durations[1], 3.6860977315, abs <= 0.000_1);
-    assert_float_eq!(independent_min_durations[2], output.trajectory.get_duration(), abs <= 0.000_1);
+    assert_float_eq!(
+        independent_min_durations[2],
+        output.trajectory.get_duration(),
+        abs <= 0.000_1
+    );
 
     let position_extrema = output.trajectory.get_position_extrema();
     assert_float_eq!(position_extrema[0].t_max, 4.0, abs <= 0.000_1);
@@ -185,7 +253,11 @@ fn test_secondary() {
         Ok(_) => panic!("Expected an error but got a successful result."),
         Err(e) => {
             let error_message = e.to_string();
-            assert!(error_message.contains("exceeds its maximum velocity limit"), "Unexpected error message: {}", error_message);
+            assert!(
+                error_message.contains("exceeds its maximum velocity limit"),
+                "Unexpected error message: {}",
+                error_message
+            );
         }
     }
     assert!(!output.new_calculation);
@@ -220,7 +292,11 @@ fn test_secondary() {
     assert_float_eq!(output.trajectory.get_duration(), 0.167347, abs <= 0.000_1);
 
     let independent_min_durations = output.trajectory.get_independent_min_durations();
-    assert_float_eq!(independent_min_durations[0], output.trajectory.get_duration(), abs <= 0.000_1);
+    assert_float_eq!(
+        independent_min_durations[0],
+        output.trajectory.get_duration(),
+        abs <= 0.000_1
+    );
     assert_float_eq!(independent_min_durations[1], 0.0, abs <= 0.000_1);
     assert_float_eq!(independent_min_durations[2], 0.0, abs <= 0.000_1);
 }
@@ -228,7 +304,7 @@ fn test_secondary() {
 #[test]
 fn test_enabled() {
     // Setup
-    let mut otg = Ruckig::new(3, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
 
@@ -246,20 +322,54 @@ fn test_enabled() {
     let result = otg.update(&input, &mut output);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert_float_eq!(output.trajectory.get_duration(), 3.1748021039, abs <= 0.000_1);
+    assert_float_eq!(
+        output.trajectory.get_duration(),
+        3.1748021039,
+        abs <= 0.000_1
+    );
 
     let mut new_position = vec![0.0; 3];
     let mut new_velocity = vec![0.0; 3];
     let mut new_acceleration = vec![0.0; 3];
 
-    output.trajectory.at_time(0.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    output.trajectory.at_time(
+        0.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
-    assert!(almost_equal_vecs(&new_position, &input.current_position, 0.000_1));
-    assert!(almost_equal_vecs(&new_velocity, &input.current_velocity, 0.000_1));
-    assert!(almost_equal_vecs(&new_acceleration, &input.current_acceleration, 0.000_1));
+    assert!(almost_equal_vecs(
+        &new_position,
+        &input.current_position,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &new_velocity,
+        &input.current_velocity,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &new_acceleration,
+        &input.current_acceleration,
+        0.000_1
+    ));
 
-    output.trajectory.at_time(output.trajectory.get_duration(), &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
-    assert!(almost_equal_vecs(&new_position, &[input.target_position[0], -1.6825197896, -1.0079368399], 0.000_1));
+    output.trajectory.at_time(
+        output.trajectory.get_duration(),
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[input.target_position[0], -1.6825197896, -1.0079368399],
+        0.000_1
+    ));
 
     // Make sure that disabled DoFs overwrite prior blocks
     input.enabled = vec![true, true, true];
@@ -285,13 +395,17 @@ fn test_enabled() {
     let result = otg.update(&input, &mut output);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert_float_eq!(output.trajectory.get_duration(), 3.6578610221, abs <= 0.000_1);
+    assert_float_eq!(
+        output.trajectory.get_duration(),
+        3.6578610221,
+        abs <= 0.000_1
+    );
 }
 
 #[test]
 fn test_phase_synchronization() {
     // Setup
-    let mut otg = Ruckig::new(3, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
     let mut traj = Trajectory::new(3);
@@ -313,18 +427,45 @@ fn test_phase_synchronization() {
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     let result = otg.update(&input, &mut output);
 
-    output.trajectory.at_time(1.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    output.trajectory.at_time(
+        1.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
-    assert!(almost_equal_vecs(&new_position, &[0.0833333333, -2.0833333333, 0.1666666667], 0.000_1));
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.0833333333, -2.0833333333, 0.1666666667],
+        0.000_1
+    ));
 
-    assert!(almost_equal_vecs(&output.trajectory.get_profiles()[0][0].t, &output.trajectory.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&output.trajectory.get_profiles()[0][0].t, &output.trajectory.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &output.trajectory.get_profiles()[0][0].t,
+        &output.trajectory.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &output.trajectory.get_profiles()[0][0].t,
+        &output.trajectory.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     input.current_position = vec![0.0, -2.0, 0.0];
 
@@ -336,26 +477,60 @@ fn test_phase_synchronization() {
 
     let result = otg.update(&input, &mut output);
 
-    output.trajectory.at_time(1.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    output.trajectory.at_time(
+        1.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
-    assert!(almost_equal_vecs(&new_position, &[0.8333333333, -2.0833333333, 0.1666666667], 0.000_1));
-    assert!(almost_equal_vecs(&output.trajectory.get_profiles()[0][0].t, &output.trajectory.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&output.trajectory.get_profiles()[0][0].t, &output.trajectory.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.8333333333, -2.0833333333, 0.1666666667],
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &output.trajectory.get_profiles()[0][0].t,
+        &output.trajectory.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &output.trajectory.get_profiles()[0][0].t,
+        &output.trajectory.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     // Test equal start and target state
     input.current_position = vec![1.0, -2.0, 3.0];
     input.target_position = vec![1.0, -2.0, 3.0];
 
     let result = otg.update(&input, &mut output);
-    output.trajectory.at_time(0.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    output.trajectory.at_time(
+        0.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
     assert_eq!(result.unwrap(), RuckigResult::Finished);
     assert_float_eq!(output.trajectory.get_duration(), 0.0, abs <= 0.000_1);
     assert!(almost_equal_vecs(&new_position, &[1.0, -2.0, 3.0], 0.000_1));
-    assert!(almost_equal_vecs(&output.trajectory.get_profiles()[0][0].t, &output.trajectory.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&output.trajectory.get_profiles()[0][0].t, &output.trajectory.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &output.trajectory.get_profiles()[0][0].t,
+        &output.trajectory.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &output.trajectory.get_profiles()[0][0].t,
+        &output.trajectory.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     input.current_position = vec![0.0, 0.0, 0.0];
     input.current_velocity = vec![0.0, 0.0, 0.0];
@@ -371,8 +546,16 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     input.current_position = vec![0.0, 0.0, 0.0];
     input.current_velocity = vec![0.0, 0.0, 0.0];
@@ -399,8 +582,16 @@ fn test_phase_synchronization() {
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     input.max_velocity = vec![1.0, 0.2, 1.0];
 
@@ -426,16 +617,32 @@ fn test_phase_synchronization() {
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     input.max_jerk = vec![1.0, 0.1, 1.0];
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][1].t, 0.000_1));
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][1].t,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][2].t,
+        0.000_1
+    ));
 
     input.target_acceleration = vec![0.01, 0.0, 0.0];
 
@@ -461,7 +668,7 @@ fn test_phase_synchronization() {
 #[test]
 fn test_discretion() {
     // Setup
-    let mut otg = Ruckig::new(3, 0.01, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.01);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
     let mut traj = Trajectory::new(3);
@@ -487,13 +694,20 @@ fn test_discretion() {
     assert_float_eq!(traj.get_duration(), 4.5, abs <= 0.000_1);
 
     let _result = otg.update(&input, &mut output);
-    output.trajectory.at_time(4.5, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    output.trajectory.at_time(
+        4.5,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
     assert!(almost_equal_vecs(&new_position, &[1.0, -3.0, 2.0], 0.000_1));
 }
 
 #[test]
 fn test_per_dof_setting() {
-    let mut otg = Ruckig::new(3, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
     let mut input = InputParameter::new(3);
     //let mut output: OutputParameter = OutputParameter::new(3);
     let mut traj = Trajectory::new(3);
@@ -511,7 +725,6 @@ fn test_per_dof_setting() {
     input.max_acceleration = vec![1.0, 1.0, 1.0];
     input.max_jerk = vec![1.0, 1.0, 1.0];
 
-
     let result = otg.calculate(&input, &mut traj);
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
@@ -520,8 +733,19 @@ fn test_per_dof_setting() {
     let mut new_velocity = vec![0.0; 3];
     let mut new_acceleration = vec![0.0; 3];
 
-    traj.at_time(2.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
-    assert!(almost_equal_vecs(&new_position, &[0.5, -2.6871268303, 1.0], 0.000_1));
+    traj.at_time(
+        2.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.5, -2.6871268303, 1.0],
+        0.000_1
+    ));
 
     input.control_interface = ControlInterface::Velocity;
 
@@ -530,51 +754,117 @@ fn test_per_dof_setting() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 1.095445115, abs <= 0.000_1);
 
-    traj.at_time(1.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
-    assert!(almost_equal_vecs(&new_position, &[0.0, -1.8641718534, 0.0], 0.000_1));
+    traj.at_time(
+        1.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.0, -1.8641718534, 0.0],
+        0.000_1
+    ));
 
-    input.per_dof_control_interface = Some(vec![ControlInterface::Position, ControlInterface::Velocity, ControlInterface::Position]);
+    input.per_dof_control_interface = Some(vec![
+        ControlInterface::Position,
+        ControlInterface::Velocity,
+        ControlInterface::Position,
+    ]);
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
-    input.per_dof_synchronization = Some(vec![Synchronization::Time, Synchronization::None, Synchronization::Time]);
+    input.per_dof_synchronization = Some(vec![
+        Synchronization::Time,
+        Synchronization::None,
+        Synchronization::Time,
+    ]);
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
-    traj.at_time(2.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        2.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
-    assert!(almost_equal_vecs(&new_position, &[0.5, -1.5643167673, 1.0], 0.000_1));
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.5, -1.5643167673, 1.0],
+        0.000_1
+    ));
 
     input.control_interface = ControlInterface::Position;
     input.per_dof_control_interface = None;
-    input.per_dof_synchronization = Some(vec![Synchronization::None, Synchronization::Time, Synchronization::Time]);
+    input.per_dof_synchronization = Some(vec![
+        Synchronization::None,
+        Synchronization::Time,
+        Synchronization::Time,
+    ]);
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
-    traj.at_time(2.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        2.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
-    assert!(almost_equal_vecs(&new_position, &[0.7482143874, -2.6871268303, 1.0], 0.000_1));
+    assert!(almost_equal_vecs(
+        &new_position,
+        &[0.7482143874, -2.6871268303, 1.0],
+        0.000_1
+    ));
 
     let independent_min_durations = traj.get_independent_min_durations();
 
-    traj.at_time(independent_min_durations[0], &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        independent_min_durations[0],
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
     assert_float_eq!(new_position[0], input.target_position[0], abs <= 0.000_1);
 
-    traj.at_time(independent_min_durations[1], &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        independent_min_durations[1],
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
     assert_float_eq!(new_position[1], -3.0890156397, abs <= 0.000_1);
 
-    traj.at_time(independent_min_durations[2], &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
+    traj.at_time(
+        independent_min_durations[2],
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
 
     assert_float_eq!(new_position[2], input.target_position[2], abs <= 0.000_1);
 
@@ -590,7 +880,11 @@ fn test_per_dof_setting() {
     input.max_acceleration = vec![2000.0, 2000.0, 2000.0];
     input.max_jerk = vec![20000.0, 20000.0, 20000.0];
 
-    input.per_dof_synchronization = Some(vec![Synchronization::Time, Synchronization::Time, Synchronization::None]);
+    input.per_dof_synchronization = Some(vec![
+        Synchronization::Time,
+        Synchronization::Time,
+        Synchronization::None,
+    ]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -609,14 +903,22 @@ fn test_per_dof_setting() {
     input.max_acceleration = vec![1.0, 1.0, 1.0];
     input.max_jerk = vec![1.0, 1.0, 1.0];
 
-    input.per_dof_synchronization = Some(vec![Synchronization::None, Synchronization::None, Synchronization::Time]);
+    input.per_dof_synchronization = Some(vec![
+        Synchronization::None,
+        Synchronization::None,
+        Synchronization::Time,
+    ]);
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 3.7885667284, abs <= 0.000_1);
 
-    input.per_dof_synchronization = Some(vec![Synchronization::None, Synchronization::Time, Synchronization::None]);
+    input.per_dof_synchronization = Some(vec![
+        Synchronization::None,
+        Synchronization::Time,
+        Synchronization::None,
+    ]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -642,7 +944,11 @@ fn test_per_dof_setting() {
     input.max_acceleration = vec![1.0, 1.0, 1.0];
     input.max_jerk = vec![1.0, 1.0, 1.0];
 
-    input.per_dof_synchronization = Some(vec![Synchronization::Phase, Synchronization::None, Synchronization::Phase]);
+    input.per_dof_synchronization = Some(vec![
+        Synchronization::Phase,
+        Synchronization::None,
+        Synchronization::Phase,
+    ]);
 
     input.enabled = vec![true, true, true];
 
@@ -651,12 +957,16 @@ fn test_per_dof_setting() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 2.848387279, abs <= 0.000_1);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
-    assert!(almost_equal_vecs(&traj.get_profiles()[0][0].t, &traj.get_profiles()[0][2].t, 0.000_1));
+    assert!(almost_equal_vecs(
+        &traj.get_profiles()[0][0].t,
+        &traj.get_profiles()[0][2].t,
+        0.000_1
+    ));
 }
 
 #[test]
 fn test_dynamic_dofs() {
-    let mut otg = Ruckig::new(3, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
 
@@ -681,15 +991,34 @@ fn test_dynamic_dofs() {
     let mut new_velocity = vec![0.0; 3];
     let mut new_acceleration = vec![0.0; 3];
 
-    output.trajectory.at_time(0.0, &mut Some(&mut new_position), &mut Some(&mut new_velocity), &mut Some(&mut new_acceleration), &mut None, &mut None);
-    assert!(almost_equal_vecs(&new_position, &input.current_position, 0.000_1));
-    assert!(almost_equal_vecs(&new_velocity, &input.current_velocity, 0.000_1));
-    assert!(almost_equal_vecs(&new_acceleration, &input.current_acceleration, 0.000_1));
+    output.trajectory.at_time(
+        0.0,
+        &mut Some(&mut new_position),
+        &mut Some(&mut new_velocity),
+        &mut Some(&mut new_acceleration),
+        &mut None,
+        &mut None,
+    );
+    assert!(almost_equal_vecs(
+        &new_position,
+        &input.current_position,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &new_velocity,
+        &input.current_velocity,
+        0.000_1
+    ));
+    assert!(almost_equal_vecs(
+        &new_acceleration,
+        &input.current_acceleration,
+        0.000_1
+    ));
 }
 
 #[test]
 fn test_zero_limits() {
-    let mut otg = Ruckig::new(3, 0.005, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
     let mut input = InputParameter::new(3);
     let mut output: OutputParameter = OutputParameter::new(3);
 
@@ -728,7 +1057,11 @@ fn test_zero_limits() {
         Ok(_) => panic!("Expected an error but got a successful result."),
         Err(e) => {
             let error_message = e.to_string();
-            assert!(error_message.contains("zero limits conflict in step 1"), "Unexpected error message: {}", error_message);
+            assert!(
+                error_message.contains("zero limits conflict in step 1"),
+                "Unexpected error message: {}",
+                error_message
+            );
         }
     }
 
@@ -743,7 +1076,11 @@ fn test_zero_limits() {
         Ok(_) => panic!("Expected an error but got a successful result."),
         Err(e) => {
             let error_message = e.to_string();
-            assert!(error_message.contains("zero limits conflict with other"), "Unexpected error message: {}", error_message);
+            assert!(
+                error_message.contains("zero limits conflict with other"),
+                "Unexpected error message: {}",
+                error_message
+            );
         }
     }
 
@@ -764,7 +1101,11 @@ fn test_zero_limits() {
         Ok(_) => panic!("Expected an error but got a successful result."),
         Err(e) => {
             let error_message = e.to_string();
-            assert!(error_message.contains("zero limits conflict with other"), "Unexpected error message: {}", error_message);
+            assert!(
+                error_message.contains("zero limits conflict with other"),
+                "Unexpected error message: {}",
+                error_message
+            );
         }
     }
 
@@ -782,4 +1123,3 @@ fn test_zero_limits() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 1.1, abs <= 0.000_1);
 }
-

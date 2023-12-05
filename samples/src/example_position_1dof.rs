@@ -1,27 +1,23 @@
 use gnuplot::Coordinate::Graph;
 use gnuplot::{AxesCommon, Caption, Figure};
-use rsruckig::input_parameter::Synchronization;
-use rsruckig::{
-    input_parameter::InputParameter, output_parameter::OutputParameter, result::RuckigResult,
-    ruckig::Ruckig,
-};
+use rsruckig::prelude::*;
 
 fn main() {
-    let mut otg = Ruckig::new(1, 0.01, true);
+    let mut otg = Ruckig::<ThrowErrorHandler>::new(1, 0.01);
     let mut input = InputParameter::new(1);
     let mut output: OutputParameter = OutputParameter::new(1);
 
-    input.current_position = vec![0.0];
-    input.current_velocity = vec![7.0];
-    input.current_acceleration = vec![0.0];
+    input.current_position[0] = 0.0;
+    input.current_velocity[0] = 7.0;
+    input.current_acceleration[0] = 0.0;
 
-    input.target_position = vec![10.0];
-    input.target_velocity = vec![0.0];
-    input.target_acceleration = vec![0.0];
+    input.target_position[0] = 10.0;
+    input.target_velocity[0] = 0.0;
+    input.target_acceleration[0] = 0.0;
 
-    input.max_velocity = vec![10.0];
-    input.max_acceleration = vec![10.0];
-    input.max_jerk = vec![30.0];
+    input.max_velocity[0] = 10.0;
+    input.max_acceleration[0] = 10.0;
+    input.max_jerk[0] = 30.0;
 
     input.synchronization = Synchronization::None;
 

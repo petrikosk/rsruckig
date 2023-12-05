@@ -1,4 +1,5 @@
 //! Calculation of a state-to-state trajectory.
+use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::{
     block::Block,
     input_parameter::{ControlInterface, DurationDiscretization, InputParameter, Synchronization},
@@ -16,7 +17,6 @@ use crate::{
     velocity_third_step1::VelocityThirdOrderStep1,
     velocity_third_step2::VelocityThirdOrderStep2,
 };
-use crate::error::RuckigError;
 
 #[derive(Default)]
 pub struct TargetCalculator {
@@ -215,8 +215,7 @@ impl TargetCalculator {
         });
 
         // Start at last tmin (or worse)
-        for &i in &self.idx[(self.degrees_of_freedom - 1)..]
-        {
+        for &i in &self.idx[(self.degrees_of_freedom - 1)..] {
             let possible_t_sync = self.possible_t_syncs[i];
             let mut is_blocked = false;
             for dof in 0..self.degrees_of_freedom {
@@ -269,12 +268,11 @@ impl TargetCalculator {
     }
 
     /// Calculate the time-optimal waypoint-based trajectory.
-    pub fn calculate(
+    pub fn calculate<T: RuckigErrorHandler>(
         &mut self,
         inp: &InputParameter,
         traj: &mut Trajectory,
         delta_time: f64,
-        throw_error: bool,
     ) -> Result<RuckigResult, RuckigError> {
         for dof in 0..self.degrees_of_freedom {
             let p = &mut traj.profiles[0][dof];
@@ -288,7 +286,11 @@ impl TargetCalculator {
                 .as_ref()
                 .map_or(-inp.max_acceleration[dof], |v| v[dof]);
             self.inp_per_dof_control_interface[dof] =
-                inp.per_dof_control_interface.as_ref().unwrap_or(&vec![inp.control_interface.clone(); self.degrees_of_freedom])[dof]
+                inp.per_dof_control_interface.as_ref().unwrap_or(&vec![
+                    inp.control_interface
+                        .clone();
+                    self.degrees_of_freedom
+                ])[dof]
                     .clone();
             self.inp_per_dof_synchronization[dof] = inp
                 .per_dof_synchronization
@@ -478,26 +480,25 @@ impl TargetCalculator {
             if !found_profile {
                 let has_zero_limits = inp.max_acceleration[dof] == 0.0
                     || inp
-                    .min_acceleration
-                    .as_ref()
-                    .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                    == 0.0
+                        .min_acceleration
+                        .as_ref()
+                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
+                        == 0.0
                     || inp.max_jerk[dof] == 0.0;
                 if has_zero_limits {
-                    if throw_error {
-                        return Err(RuckigError::new(format!(
+                    return T::handle_calculator_error(
+                        &format!(
                             "zero limits conflict in step 1, dof: {} input: {}",
-                            dof,
-                            inp
-                        ).to_owned()));
-                    } else {
-                        return Ok(RuckigResult::ErrorZeroLimits);
-                    }
-                } else if throw_error {
-                    return Err(RuckigError::new(format!("error in step 1, dof: {} input: {}", dof, inp).to_owned()));
-                } else {
-                    return Ok(RuckigResult::ErrorExecutionTimeCalculation);
+                            dof, inp
+                        )
+                        .to_owned(),
+                        RuckigResult::ErrorZeroLimits,
+                    );
                 }
+                return T::handle_calculator_error(
+                    &format!("error in step 1, dof: {} input: {}", dof, inp).to_owned(),
+                    RuckigResult::ErrorExecutionTimeCalculation,
+                );
             }
 
             traj.independent_min_durations[dof] = self.blocks[dof].t_min;
@@ -524,10 +525,10 @@ impl TargetCalculator {
             for dof in 0..self.degrees_of_freedom {
                 if inp.max_acceleration[dof] == 0.0
                     || inp
-                    .min_acceleration
-                    .as_ref()
-                    .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                    == 0.0
+                        .min_acceleration
+                        .as_ref()
+                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
+                        == 0.0
                     || inp.max_jerk[dof] == 0.0
                 {
                     has_zero_limits = true;
@@ -536,16 +537,14 @@ impl TargetCalculator {
             }
 
             if has_zero_limits {
-                if throw_error {
-                    return Err(RuckigError::new(format!("zero limits conflict with other degrees of freedom in time synchronization {}", traj.duration)));
-                } else {
-                    return Ok(RuckigResult::ErrorZeroLimits);
-                }
-            } else if throw_error {
-                return Err(RuckigError::new(format!("error in time synchronization: {}", traj.duration)));
-            } else {
-                return Ok(RuckigResult::ErrorSynchronizationCalculation);
+                return T::handle_calculator_error(
+                    &format!("zero limits conflict with other degrees of freedom in time synchronization {}", traj.duration),
+                    RuckigResult::ErrorZeroLimits);
             }
+            return T::handle_calculator_error(
+                &format!("error in time synchronization: {}", traj.duration),
+                RuckigResult::ErrorSynchronizationCalculation,
+            );
         }
         // None Synchronization
         for dof in 0..self.degrees_of_freedom {
@@ -573,9 +572,9 @@ impl TargetCalculator {
 
         if !discrete_duration
             && self
-            .inp_per_dof_synchronization
-            .iter()
-            .all(|s| s == &Synchronization::None)
+                .inp_per_dof_synchronization
+                .iter()
+                .all(|s| s == &Synchronization::None)
         {
             return Ok(RuckigResult::Working);
         }
@@ -731,9 +730,9 @@ impl TargetCalculator {
 
                     if found_time_synchronization
                         && self
-                        .inp_per_dof_synchronization
-                        .iter()
-                        .all(|s| s == &Synchronization::Phase || s == &Synchronization::None)
+                            .inp_per_dof_synchronization
+                            .iter()
+                            .all(|s| s == &Synchronization::Phase || s == &Synchronization::None)
                     {
                         return Ok(RuckigResult::Working);
                     }
@@ -844,20 +843,17 @@ impl TargetCalculator {
                         found_time_synchronization = step2.get_profile(p);
                     }
                 }
-                _ => {} 
+                _ => {}
             }
 
             if !found_time_synchronization {
-                return if throw_error {
-                    Err(RuckigError::new(format!(
+                return T::handle_calculator_error(
+                    &format!(
                         "error in step 2 in dof: {} for t sync: {} input: {}",
-                        dof,
-                        traj.duration,
-                        inp
-                    )))
-                } else {
-                    Ok(RuckigResult::ErrorSynchronizationCalculation)
-                }
+                        dof, traj.duration, inp
+                    ),
+                    RuckigResult::ErrorExecutionTimeCalculation,
+                );
             }
 
             // Uncomment the following line if you want to debug

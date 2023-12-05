@@ -22,3 +22,15 @@ pub mod velocity_second_step1;
 pub mod velocity_second_step2;
 pub mod velocity_third_step1;
 pub mod velocity_third_step2;
+pub mod prelude {
+    pub use super::error::RuckigError;
+    pub use super::error::{IgnoreErrorHandler, ThrowErrorHandler};
+    pub use super::input_parameter::{
+        ControlInterface, DurationDiscretization, InputParameter, Synchronization,
+    };
+    pub use super::output_parameter::OutputParameter;
+    pub use super::profile::Profile;
+    pub use super::result::RuckigResult;
+    pub use super::ruckig::Ruckig;
+    pub use super::trajectory::Trajectory;
+}

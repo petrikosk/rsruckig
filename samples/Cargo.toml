@@ -17,8 +17,5 @@ name = "example_velocity_1dof"
 path = "src/example_velocity_1dof.rs"
 
 [dependencies]
+rsruckig = { path = "../lib" }
 gnuplot = "0.0.39"
-
-[dependencies.rsruckig]
-path = "../lib"
-version = "0.1.2"

@@ -5,7 +5,7 @@
   </h3>
 </div>
 
-This is a Rust port of the repository https://github.com/pantor/ruckig/. Cloud client features are not ported. The
+This is a Rust port of the repository https://github.com/pantor/ruckig/. Cloud client and pro-features are not ported. The
 examples use Gnuplot to illustrate the trajectories.
 
 Ruckig generates trajectories on-the-fly, allowing robots and machines to react instantaneously to sensor input. Ruckig
@@ -40,12 +40,15 @@ Let's get started!
 
 Ruckig provides three main interface classes: the *Ruckig*, the *InputParameter*, and the *OutputParameter* class.
 
-First, you'll need to create a Ruckig instance with the number of DoFs as a template parameter, and the control cycle (
+First, you'll need to create a Ruckig instance with the ```RuckigErrorHandler``` as a template parameter, and the number of DOFs and the control cycle (
 e.g. in seconds) in the constructor.
 
 ```.rs
-let mut ruckig = Ruckig::new(6, 0.01, true); // Number DoFs; control cycle in [s]; throw error 
+let mut ruckig = Ruckig::<ThrowErrorHandler>::new(6, 0.01); // Number DoFs; control cycle in [s]
 ```
+Possible error handlers are:
+- ```ThrowErrorHandler``` - throws an error with a detailed reason if an input is not valid.
+- ```IgnoreErrorHandler``` - ignores the error and returns ```Ok(RuckigResult)```.
 
 The input type has 3 blocks of data: the *current* state, the *target* state and the corresponding kinematic *limits*.
 
@@ -143,13 +146,13 @@ the `ruckig` namespace for all available options.
 To check that Ruckig is able to generate a trajectory before the actual calculation step,
 
 ```.rs
-ruckig.validate_input<T: ValidationErrorHandler>(input, throw_validation_error, check_current_state_within_limits, check_target_state_within_limits);
-// returns Result<bool, RuckigError>. If throw_validation_error is true, it returns Err(RuckigError::ValidationError) in case of error.
-// Otherwise, it returns Ok(true) if the input is valid, and Ok(false) if the input is invalid.
+ruckig.validate_input<E: RuckigErrorHandler>(input, check_current_state_within_limits, check_target_state_within_limits);
+// returns Result<bool, RuckigError>. If RuckigErrorHandler is ThrowErrorHandler, it returns Err(RuckigError::ValidationError) in case of error.
+// If the error handler is IgnoreErrorHandler, it returns Ok(true) if the input is valid, and Ok(false) if the input is invalid.
 ```
 
-throws an error with a detailed reason if an input is not valid. You can also set the default template parameter
-via `ruckig.validate_input<ThrowErrorHandler>(...)` . The two boolean arguments check that the current or target state
+throws an error with a detailed reason if an input is not valid. You must set the template parameter
+via e.g. `ruckig.validate_input<ThrowErrorHandler>(...)` . The two boolean arguments check that the current or target state
 are within the limits. The check includes a typical catch of jerk-limited trajectory generation: When the current state
 is at maximal velocity, any positive acceleration will inevitable lead to a velocity violation *at a future timestep*.
 In general, this condition is fulfilled when
@@ -162,7 +165,7 @@ If both arguments are set to true, the calculated trajectory is guaranteed to be
 throughout* its duration. Also, note that there are range constraints of the input due to numerical reasons, see below
 for more details.
 
-### Result Type
+### ```RuckigResult``` type
 
 The `update` function of the Ruckig class returns a Result type that indicates the current state of the algorithm. This
 can either be **working**, **finished** if the trajectory has finished, or an **error** type if something went wrong
@@ -199,7 +202,7 @@ was_calculation_interrupted: bool; // Was the trajectory calculation interrupted
 calculation_duration: f64; // Duration of the calculation in the last cycle [µs]
 ```
 
-Moreover, the **trajectory** class has a range of useful parameters and methods.
+Moreover, the **trajectory** struct has a range of useful parameters and methods.
 
 ```.rs
 duration: f64; // Duration of the trajectory
@@ -217,7 +220,7 @@ independent_min_durations: Vec<f64>; // Time-optimal profile for each independen
 <...> get_position_extrema(); // Returns information about the position extrema and their times
 ```
 
-Again, we refer to the [API documentation](https://docs.ruckig.com) for the exact signatures.
+Again, we refer to the [API documentation](https://docs.ruckig.com) for the exact signatures. (C++ version only)
 
 ### Offline Calculation
 
@@ -249,46 +252,12 @@ below `1e12`. The maximal supported trajectory duration is `7e3`. Note that Ruck
 this range, there is however no guarantee for correctness. The Ruckig Pro version has additional tools to increase the
 numerical range and improve reliability.
 
-## Benchmark
-
-We find that Ruckig is more than twice as fast as Reflexxes Type IV for state-to-state motions and well-suited for
-control cycles as low as 250 microseconds. The Ruckig *Community Version* is in general a more powerful and open-source
-alternative to the [Reflexxes Type IV](http://reflexxes.ws/) library. In fact, Ruckig is the first Type V trajectory
-generator for arbitrary target states and even supports directional velocity and acceleration limits, while also being
-faster on top.
-
-![Benchmark](https://github.com/pantor/ruckig/raw/master/doc/benchmark.png?raw=true)
-
-For trajectories with intermediate waypoints, we compare Ruckig to [Toppra](https://github.com/hungpham2511/toppra), a
-state-of-the-art library for robotic motion planning. Ruckig is able to improve the trajectory duration on average by
-around 10%, as the path planning and time parametrization are calculated jointly. Moreover, Ruckig is real-time capable
-and supports jerk-constraints.
-
-![Benchmark](https://github.com/pantor/ruckig/raw/master/doc/ruckig_toppra_example.png?raw=true)
-
 ## Development
 
 Original Ruckig is written in C++17. It is continuously tested on `ubuntu-latest`, `macos-latest`, and `windows-latest`
 against following versions
 
 Rust version is a port of the original C++ version, excluding Pro features and cloud client.
-
-## Used By
-
-Ruckig is used by over hundred research labs, companies, and open-source projects worldwide, including:
-
-- [MoveIt 2](https://moveit.ros.org) for trajectory generation.
-- [CoppeliaSim](https://www.coppeliarobotics.com/) starting from version 4.3.
-- [Fuzzy Logic Robotics](https://flr.io)
-- [Gestalt Robotics](https://www.gestalt-robotics.com)
-- [Struckig](https://github.com/stefanbesler/struckig), a port of Ruckig to Structered Text (ST - IEC61131-3) for usage
-  on PLCs.
-- [Scanlab](https://www.scanlab.de/de) for controlling lasers.
-- [Frankx](https://github.com/pantor/frankx) for controlling the Franka Emika robot arm.
-- [Wiredworks](https://wiredworks.com) made a simple
-  Kivy [GUI application](https://github.com/wiredworks/ruckig-showcase)
-- [rsruckig](https://github.com/petrikosk/rsruckig)
-- and many others!
 
 ## Rust port TODOs
 
