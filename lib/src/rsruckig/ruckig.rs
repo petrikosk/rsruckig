@@ -18,8 +18,7 @@ pub struct Ruckig<E: RuckigErrorHandler> {
     _error_handler: PhantomData<E>,
 }
 
-impl<E: RuckigErrorHandler> Ruckig<E> {
-    #[allow(dead_code)]
+impl<E: RuckigErrorHandler> Default for Ruckig<E> {
     fn default() -> Self {
         Self::new(1, 0.01)
     }
