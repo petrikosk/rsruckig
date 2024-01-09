@@ -1,4 +1,4 @@
-use crate::profile::PositionExtrema;
+use crate::profile::Bound;
 use crate::profile::Profile;
 use crate::util::integrate;
 
@@ -9,7 +9,7 @@ pub struct Trajectory {
     pub duration: f64,
     pub cumulative_times: Vec<f64>,
     pub independent_min_durations: Vec<f64>,
-    position_extrema: Vec<PositionExtrema>,
+    position_extrema: Vec<Bound>,
     degrees_of_freedom: usize,
     continue_calculation_counter: usize,
 }
@@ -21,7 +21,7 @@ impl Trajectory {
             duration: 0.0,
             cumulative_times: vec![0.0; dofs],
             independent_min_durations: vec![0.0; dofs],
-            position_extrema: vec![PositionExtrema::default(); dofs],
+            position_extrema: vec![Bound::default(); dofs],
             degrees_of_freedom: dofs,
             continue_calculation_counter: 0,
         }
@@ -202,7 +202,7 @@ impl Trajectory {
         &self.independent_min_durations
     }
 
-    pub fn get_position_extrema(&mut self) -> &Vec<PositionExtrema> {
+    pub fn get_position_extrema(&mut self) -> &Vec<Bound> {
         for dof in 0..self.degrees_of_freedom {
             self.position_extrema[dof] = self.profiles[0][dof].get_position_extrema();
         }

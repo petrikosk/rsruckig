@@ -41,7 +41,7 @@ pub enum ControlSigns {
 }
 
 #[derive(Clone, Default)]
-pub struct PositionExtrema {
+pub struct Bound {
     // The extreme position
     pub min: f64,
     pub max: f64,
@@ -712,7 +712,7 @@ impl Profile {
         v: f64,
         a: f64,
         j: f64,
-        ext: &mut PositionExtrema,
+        ext: &mut Bound,
     ) {
         if 0.0 < t_ext && t_ext < t {
             let (p_ext, _, a_ext) = integrate(t_ext, p, v, a, j);
@@ -733,7 +733,7 @@ impl Profile {
         v: f64,
         a: f64,
         j: f64,
-        ext: &mut PositionExtrema,
+        ext: &mut Bound,
     ) {
         if p < ext.min {
             ext.min = p;
@@ -756,8 +756,8 @@ impl Profile {
         }
     }
 
-    pub fn get_position_extrema(&self) -> PositionExtrema {
-        let mut extrema = PositionExtrema {
+    pub fn get_position_extrema(&self) -> Bound {
+        let mut extrema = Bound {
             min: f64::INFINITY,
             max: f64::NEG_INFINITY,
             t_min: 0.0,

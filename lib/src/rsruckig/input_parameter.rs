@@ -280,53 +280,74 @@ impl InputParameter {
 
 impl fmt::Display for InputParameter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "")?;
+
+        if self.control_interface == ControlInterface::Velocity {
+            writeln!(f, "inp.control_interface = ControlInterface.Velocity")?;
+        }
+        if self.synchronization == Synchronization::Phase {
+            writeln!(f, "inp.synchronization = Synchronization.Phase")?;
+        } else if self.synchronization == Synchronization::None {
+            writeln!(f, "inp.synchronization = Synchronization.No")?;
+        }
+        if self.duration_discretization == DurationDiscretization::Discrete {
+            writeln!(
+                f,
+                "inp.duration_discretization = DurationDiscretization.Discrete"
+            )?;
+        }
+
         writeln!(
             f,
             "\ninp.current_position = [{}]",
-            join(self.current_position.deref())
+            join(self.current_position.deref(), true)
         )?;
         writeln!(
             f,
             "inp.current_velocity = [{}]",
-            join(self.current_velocity.deref())
+            join(self.current_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "inp.current_acceleration = [{}]",
-            join(self.current_acceleration.deref())
+            join(self.current_acceleration.deref(), true)
         )?;
         writeln!(
             f,
             "inp.target_position = [{}]",
-            join(self.target_position.deref())
+            join(self.target_position.deref(), true)
         )?;
         writeln!(
             f,
             "inp.target_velocity = [{}]",
-            join(self.target_velocity.deref())
+            join(self.target_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "inp.target_acceleration = [{}]",
-            join(self.target_acceleration.deref())
+            join(self.target_acceleration.deref(), true)
         )?;
         writeln!(
             f,
             "inp.max_velocity = [{}]",
-            join(self.max_velocity.deref())
+            join(self.max_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "inp.max_acceleration = [{}]",
-            join(self.max_acceleration.deref())
+            join(self.max_acceleration.deref(), true)
         )?;
-        writeln!(f, "inp.max_jerk = [{}]", join(self.max_jerk.deref()))?;
+        writeln!(f, "inp.max_jerk = [{}]", join(self.max_jerk.deref(), true))?;
 
         if let Some(min_vel) = &self.min_velocity {
-            writeln!(f, "inp.min_velocity = [{}]", join(min_vel.deref()))?;
+            writeln!(f, "inp.min_velocity = [{}]", join(min_vel.deref(), true))?;
         }
         if let Some(min_acc) = &self.min_acceleration {
-            writeln!(f, "inp.min_acceleration = [{}]", join(min_acc.deref()))?;
+            writeln!(
+                f,
+                "inp.min_acceleration = [{}]",
+                join(min_acc.deref(), true)
+            )?;
         }
 
         Ok(())

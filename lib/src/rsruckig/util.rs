@@ -1,9 +1,17 @@
-pub fn join<T: std::fmt::Display>(array: &[T]) -> String {
-    array
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(", ")
+pub fn join(numbers: &[f64], high_precision: bool) -> String {
+    if high_precision {
+        numbers
+            .iter()
+            .map(|&num| format!("{:.16}", num))
+            .collect::<Vec<String>>()
+            .join(", ")
+    } else {
+        numbers
+            .iter()
+            .map(|&num| num.to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
 }
 
 #[inline]

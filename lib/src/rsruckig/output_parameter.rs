@@ -50,19 +50,19 @@ impl fmt::Display for OutputParameter {
         writeln!(
             f,
             "\nout.new_position = [{}]",
-            join(self.new_position.deref())
+            join(self.new_position.deref(), true)
         )?;
         writeln!(
             f,
             "out.new_velocity = [{}]",
-            join(self.new_velocity.deref())
+            join(self.new_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "out.new_acceleration = [{}]",
-            join(self.new_acceleration.deref())
+            join(self.new_acceleration.deref(), true)
         )?;
-        writeln!(f, "out.new_jerk = [{}]", join(self.new_jerk.deref()))?;
+        writeln!(f, "out.new_jerk = [{}]", join(self.new_jerk.deref(), true))?;
         writeln!(f, "out.time = [{}]", self.time)?;
         writeln!(
             f,
