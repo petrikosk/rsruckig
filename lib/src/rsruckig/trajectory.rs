@@ -3,27 +3,35 @@ use crate::profile::Profile;
 use crate::util::integrate;
 
 // We'll use Vec<T> instead of CustomVector<T, DOFs>
-#[derive(Clone, Default)]
-pub struct Trajectory {
-    pub profiles: Vec<Vec<Profile>>,
+#[derive(Clone)]
+pub struct Trajectory<const DOF: usize> {
+    pub profiles: Vec<[Profile; DOF]>,
     pub duration: f64,
-    pub cumulative_times: Vec<f64>,
-    pub independent_min_durations: Vec<f64>,
-    position_extrema: Vec<Bound>,
-    degrees_of_freedom: usize,
-    continue_calculation_counter: usize,
+    pub cumulative_times: [f64; DOF],
+    pub independent_min_durations: [f64; DOF],
+    position_extrema: [Bound; DOF],
 }
 
-impl Trajectory {
-    pub fn new(dofs: usize) -> Self {
+impl<const DOF: usize> Default for Trajectory<DOF> {
+    fn default() -> Self {
         Self {
-            profiles: vec![vec![Profile::default(); dofs]],
+            profiles: Default::default(),
+            duration: Default::default(),
+            cumulative_times: std::array::from_fn(|_| Default::default()),
+            independent_min_durations: std::array::from_fn(|_| Default::default()),
+            position_extrema: std::array::from_fn(|_| Default::default()),
+        }
+    }
+}
+
+impl<const DOF: usize> Trajectory<DOF> {
+    pub fn new() -> Self {
+        Self {
+            profiles: vec![[Profile::default(); DOF]],
             duration: 0.0,
-            cumulative_times: vec![0.0; dofs],
-            independent_min_durations: vec![0.0; dofs],
-            position_extrema: vec![Bound::default(); dofs],
-            degrees_of_freedom: dofs,
-            continue_calculation_counter: 0,
+            cumulative_times: [0.0; DOF],
+            independent_min_durations: [0.0; DOF],
+            position_extrema: std::array::from_fn(|_| Bound::default()),
         }
     }
     pub fn state_to_integrate_from<F>(
@@ -126,40 +134,13 @@ impl Trajectory {
         }
     }
 
-    // Equivalent to the C++ constructor with D == 0
-    pub fn with_dofs(dofs: usize) -> Self {
-        let mut traj = Trajectory {
-            degrees_of_freedom: dofs,
-            profiles: Vec::new(),
-            duration: 0.0,
-            cumulative_times: Vec::new(),
-            independent_min_durations: Vec::new(),
-            position_extrema: Vec::new(),
-            continue_calculation_counter: 0,
-        };
-        traj.resize_for_dofs(dofs);
-        traj
-    }
-
-    // This is a helper method for resizing based on dofs
-    fn resize_for_dofs(&mut self, dofs: usize) {
-        // Do the necessary resizing. Assuming `profiles` and others are Vecs:
-        self.profiles[0].resize(dofs, Default::default());
-        self.independent_min_durations.resize(dofs, 0.0);
-        self.position_extrema.resize(dofs, Default::default());
-        self.cumulative_times.resize(dofs, 0.0);
-        self.continue_calculation_counter = 0;
-        self.degrees_of_freedom = dofs;
-        self.duration = 0.0;
-    }
-
     pub fn at_time(
         &self,
         time: f64,
-        new_position: &mut Option<&mut Vec<f64>>,
-        new_velocity: &mut Option<&mut Vec<f64>>,
-        new_acceleration: &mut Option<&mut Vec<f64>>,
-        new_jerk: &mut Option<&mut Vec<f64>>,
+        new_position: &mut Option<&mut [f64; DOF]>,
+        new_velocity: &mut Option<&mut [f64; DOF]>,
+        new_acceleration: &mut Option<&mut [f64; DOF]>,
+        new_jerk: &mut Option<&mut [f64; DOF]>,
         new_section: &mut Option<usize>,
     ) {
         new_section.get_or_insert(0);
@@ -186,7 +167,7 @@ impl Trajectory {
         }
     }
 
-    pub fn get_profiles(&self) -> &Vec<Vec<Profile>> {
+    pub fn get_profiles(&self) -> &Vec<[Profile; DOF]> {
         &self.profiles
     }
 
@@ -194,21 +175,21 @@ impl Trajectory {
         self.duration
     }
 
-    pub fn get_intermediate_durations(&self) -> &Vec<f64> {
+    pub fn get_intermediate_durations(&self) -> &[f64; DOF] {
         &self.cumulative_times
     }
 
-    pub fn get_independent_min_durations(&self) -> &Vec<f64> {
+    pub fn get_independent_min_durations(&self) -> &[f64; DOF] {
         &self.independent_min_durations
     }
 
-    pub fn get_position_extrema(&mut self) -> &Vec<Bound> {
-        for dof in 0..self.degrees_of_freedom {
+    pub fn get_position_extrema(&mut self) -> &[Bound; DOF] {
+        for dof in 0..DOF {
             self.position_extrema[dof] = self.profiles[0][dof].get_position_extrema();
         }
 
         for i in 1..self.profiles.len() {
-            for dof in 0..self.degrees_of_freedom {
+            for dof in 0..DOF {
                 let section_position_extrema = self.profiles[i][dof].get_position_extrema();
                 if section_position_extrema.max > self.position_extrema[dof].max {
                     self.position_extrema[dof].max = section_position_extrema.max;
@@ -225,7 +206,7 @@ impl Trajectory {
     }
 
     pub fn get_first_time_at_position(&self, dof: usize, position: f64) -> Option<f64> {
-        if dof >= self.degrees_of_freedom {
+        if dof >= DOF {
             return None;
         }
 

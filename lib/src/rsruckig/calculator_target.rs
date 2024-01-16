@@ -1,4 +1,6 @@
 //! Calculation of a state-to-state trajectory.
+use std::array;
+
 use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::{
     block::Block,
@@ -18,53 +20,50 @@ use crate::{
     velocity_third_step2::VelocityThirdOrderStep2,
 };
 
-#[derive(Default)]
-pub struct TargetCalculator {
+pub struct TargetCalculator<const DOF: usize> {
     eps: f64,
     return_error_at_maximal_duration: bool,
-    new_phase_control: Vec<f64>,
-    pd: Vec<f64>,
+    new_phase_control: [f64; DOF],
+    pd: [f64; DOF],
     possible_t_syncs: Vec<f64>,
     idx: Vec<usize>,
-    blocks: Vec<Block>,
-    inp_min_velocity: Vec<f64>,
-    inp_min_acceleration: Vec<f64>,
-    inp_per_dof_control_interface: Vec<ControlInterface>,
-    inp_per_dof_synchronization: Vec<Synchronization>,
-    pub degrees_of_freedom: usize,
+    blocks: [Block; DOF],
+    inp_min_velocity: [f64; DOF],
+    inp_min_acceleration: [f64; DOF],
+    inp_per_dof_control_interface: [ControlInterface; DOF],
+    inp_per_dof_synchronization: [Synchronization; DOF],
 }
 
-impl TargetCalculator {
-    pub fn new(dofs: usize) -> Self {
+impl<const DOF: usize> TargetCalculator<DOF> {
+    pub fn new() -> Self {
         Self {
-            blocks: vec![Block::default(); dofs],
-            inp_min_velocity: vec![0.0; dofs],
-            inp_min_acceleration: vec![0.0; dofs],
-            inp_per_dof_control_interface: vec![ControlInterface::default(); dofs],
-            inp_per_dof_synchronization: vec![Synchronization::default(); dofs],
-            new_phase_control: vec![0.0; dofs],
-            pd: vec![0.0; dofs],
-            possible_t_syncs: vec![0.0; 3 * dofs + 1],
-            idx: vec![0; 3 * dofs + 1],
+            blocks: array::from_fn(|_| Block::default()),
+            inp_min_velocity: [0.0; DOF],
+            inp_min_acceleration: [0.0; DOF],
+            inp_per_dof_control_interface: [ControlInterface::default(); DOF],
+            inp_per_dof_synchronization: [Synchronization::default(); DOF],
+            new_phase_control: [0.0; DOF],
+            pd: [0.0; DOF],
+            possible_t_syncs: vec![0.0; 3 * DOF + 1],
+            idx: vec![0; 3 * DOF + 1],
             eps: f64::EPSILON,
             return_error_at_maximal_duration: true,
-            degrees_of_freedom: dofs,
         }
     }
     fn is_input_collinear(
         &mut self,
-        inp: &InputParameter,
+        inp: &InputParameter<DOF>,
         limiting_direction: Direction,
         limiting_dof: usize,
     ) -> bool {
         // Check that vectors pd, v0, a0, vf, af are collinear
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             self.pd[dof] = inp.target_position[dof] - inp.current_position[dof];
         }
 
-        let mut scale_vector: Option<&Vec<f64>> = None;
+        let mut scale_vector: Option<&[f64; DOF]> = None;
         let mut scale_dof: Option<usize> = None;
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             if self.inp_per_dof_synchronization[dof] != Synchronization::Phase {
                 continue;
             }
@@ -119,7 +118,7 @@ impl TargetCalculator {
             };
         }
 
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             if self.inp_per_dof_synchronization[dof] != Synchronization::Phase {
                 continue;
             }
@@ -154,31 +153,29 @@ impl TargetCalculator {
 
         // Possible t_syncs are the start times of the intervals and optional t_min
         let mut any_interval = false;
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             // Ignore DoFs without synchronization here
             if self.inp_per_dof_synchronization[dof] == Synchronization::None {
                 self.possible_t_syncs[dof] = 0.0;
-                self.possible_t_syncs[self.degrees_of_freedom + dof] = f64::INFINITY;
-                self.possible_t_syncs[2 * self.degrees_of_freedom + dof] = f64::INFINITY;
+                self.possible_t_syncs[DOF + dof] = f64::INFINITY;
+                self.possible_t_syncs[2 * DOF + dof] = f64::INFINITY;
                 continue;
             }
 
             self.possible_t_syncs[dof] = self.blocks[dof].t_min;
-            self.possible_t_syncs[self.degrees_of_freedom + dof] =
-                if let Some(a) = &self.blocks[dof].a {
-                    a.right
-                } else {
-                    f64::INFINITY
-                };
-            self.possible_t_syncs[2 * self.degrees_of_freedom + dof] =
-                if let Some(b) = &self.blocks[dof].b {
-                    b.right
-                } else {
-                    f64::INFINITY
-                };
+            self.possible_t_syncs[DOF + dof] = if let Some(a) = &self.blocks[dof].a {
+                a.right
+            } else {
+                f64::INFINITY
+            };
+            self.possible_t_syncs[2 * DOF + dof] = if let Some(b) = &self.blocks[dof].b {
+                b.right
+            } else {
+                f64::INFINITY
+            };
             any_interval |= self.blocks[dof].a.is_some() || self.blocks[dof].b.is_some();
         }
-        self.possible_t_syncs[3 * self.degrees_of_freedom] = t_min.unwrap_or(f64::INFINITY);
+        self.possible_t_syncs[3 * DOF] = t_min.unwrap_or(f64::INFINITY);
         any_interval |= t_min.is_some();
 
         if discrete_duration {
@@ -196,11 +193,7 @@ impl TargetCalculator {
 
         // Test them in sorted order
         // Setting up the range for `idx_end`
-        let idx_end = if any_interval {
-            self.idx.len()
-        } else {
-            self.degrees_of_freedom
-        };
+        let idx_end = if any_interval { self.idx.len() } else { DOF };
 
         // Initialize the range similar to `std::iota`
         for i in 0..idx_end {
@@ -215,10 +208,10 @@ impl TargetCalculator {
         });
 
         // Start at last tmin (or worse)
-        for &i in &self.idx[(self.degrees_of_freedom - 1)..] {
+        for &i in &self.idx[(DOF - 1)..] {
             let possible_t_sync = self.possible_t_syncs[i];
             let mut is_blocked = false;
-            for dof in 0..self.degrees_of_freedom {
+            for dof in 0..DOF {
                 if self.inp_per_dof_synchronization[dof] == Synchronization::None {
                     continue; // inner dof loop
                 }
@@ -233,14 +226,14 @@ impl TargetCalculator {
             }
 
             *t_sync = possible_t_sync;
-            if i == 3 * self.degrees_of_freedom {
+            if i == 3 * DOF {
                 // Optional t_min
                 *limiting_dof = None;
                 return true;
             }
 
-            let div = i / self.degrees_of_freedom;
-            *limiting_dof = Some(i % self.degrees_of_freedom);
+            let div = i / DOF;
+            *limiting_dof = Some(i % DOF);
             match div {
                 0 => {
                     profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()].p_min;
@@ -270,11 +263,11 @@ impl TargetCalculator {
     /// Calculate the time-optimal waypoint-based trajectory.
     pub fn calculate<T: RuckigErrorHandler>(
         &mut self,
-        inp: &InputParameter,
-        traj: &mut Trajectory,
+        inp: &InputParameter<DOF>,
+        traj: &mut Trajectory<DOF>,
         delta_time: f64,
     ) -> Result<RuckigResult, RuckigError> {
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             let p = &mut traj.profiles[0][dof];
 
             self.inp_min_velocity[dof] = inp
@@ -285,18 +278,14 @@ impl TargetCalculator {
                 .min_acceleration
                 .as_ref()
                 .map_or(-inp.max_acceleration[dof], |v| v[dof]);
-            self.inp_per_dof_control_interface[dof] =
-                inp.per_dof_control_interface.as_ref().unwrap_or(&vec![
-                    inp.control_interface
-                        .clone();
-                    self.degrees_of_freedom
-                ])[dof]
-                    .clone();
+            self.inp_per_dof_control_interface[dof] = inp
+                .per_dof_control_interface
+                .as_ref()
+                .unwrap_or(&[inp.control_interface; DOF])[dof];
             self.inp_per_dof_synchronization[dof] = inp
                 .per_dof_synchronization
                 .as_ref()
-                .unwrap_or(&vec![inp.synchronization.clone(); self.degrees_of_freedom])[dof]
-                .clone();
+                .unwrap_or(&[inp.synchronization; DOF])[dof];
 
             if !inp.enabled[dof] {
                 if let Some(last) = p.p.last_mut() {
@@ -504,7 +493,7 @@ impl TargetCalculator {
             traj.independent_min_durations[dof] = self.blocks[dof].t_min;
         }
         let discrete_duration = inp.duration_discretization == DurationDiscretization::Discrete;
-        if self.degrees_of_freedom == 1 && inp.minimum_duration.is_some() && !discrete_duration {
+        if DOF == 1 && inp.minimum_duration.is_some() && !discrete_duration {
             traj.duration = self.blocks[0].t_min;
             traj.profiles[0][0] = self.blocks[0].p_min;
             traj.cumulative_times[0] = traj.duration;
@@ -522,7 +511,7 @@ impl TargetCalculator {
         );
         if !found_synchronization {
             let mut has_zero_limits = false;
-            for dof in 0..self.degrees_of_freedom {
+            for dof in 0..DOF {
                 if inp.max_acceleration[dof] == 0.0
                     || inp
                         .min_acceleration
@@ -547,7 +536,7 @@ impl TargetCalculator {
             );
         }
         // None Synchronization
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             if inp.enabled[dof] && self.inp_per_dof_synchronization[dof] == Synchronization::None {
                 traj.profiles[0][dof] = self.blocks[dof].p_min;
                 if self.blocks[dof].t_min > traj.duration {
@@ -564,7 +553,7 @@ impl TargetCalculator {
 
         if (traj.duration - 0.0).abs() < f64::EPSILON {
             // Copy all profiles for end state
-            for dof in 0..self.degrees_of_freedom {
+            for dof in 0..DOF {
                 traj.profiles[0][dof] = self.blocks[dof].p_min;
             }
             return Ok(RuckigResult::Working);
@@ -589,7 +578,7 @@ impl TargetCalculator {
                 let p_limiting = traj.profiles[0][limiting_dof_value];
                 if self.is_input_collinear(inp, p_limiting.direction, limiting_dof_value) {
                     let mut found_time_synchronization = true;
-                    for dof in 0..self.degrees_of_freedom {
+                    for dof in 0..DOF {
                         if !inp.enabled[dof]
                             || dof == limiting_dof_value
                             || self.inp_per_dof_synchronization[dof] != Synchronization::Phase
@@ -741,7 +730,7 @@ impl TargetCalculator {
         }
 
         // Time Synchronization
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             let skip_synchronization = (Some(dof) == limiting_dof
                 || self.inp_per_dof_synchronization[dof] == Synchronization::None)
                 && !discrete_duration;

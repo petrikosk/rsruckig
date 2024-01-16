@@ -3,25 +3,25 @@ use gnuplot::{AxesCommon, Caption, Figure};
 use rsruckig::prelude::*;
 
 fn main() {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.01);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(0.01);
+    let mut input = InputParameter::new();
+    let mut output = OutputParameter::new();
 
-    input.current_position = vec![0.0, 0.0, 0.5];
-    input.current_velocity = vec![0.0, -2.2, -0.5];
-    input.current_acceleration = vec![0.0, 2.5, -0.5];
+    input.current_position = [0.0, 0.0, 0.5];
+    input.current_velocity = [0.0, -2.2, -0.5];
+    input.current_acceleration = [0.0, 2.5, -0.5];
 
-    input.target_position = vec![5.0, -2.0, -3.5];
-    input.target_velocity = vec![0.0, -0.5, -2.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.5];
+    input.target_position = [5.0, -2.0, -3.5];
+    input.target_velocity = [0.0, -0.5, -2.0];
+    input.target_acceleration = [0.0, 0.0, 0.5];
 
-    input.max_velocity = vec![3.0, 1.0, 3.0];
-    input.max_acceleration = vec![3.0, 2.0, 1.0];
-    input.max_jerk = vec![4.0, 3.0, 2.0];
+    input.max_velocity = [3.0, 1.0, 3.0];
+    input.max_acceleration = [3.0, 2.0, 1.0];
+    input.max_jerk = [4.0, 3.0, 2.0];
 
     // Set different constraints for negative direction
-    input.min_velocity = Some(vec![-2.0, -0.5, -3.0]);
-    input.min_acceleration = Some(vec![-2.0, -2.0, -2.0]);
+    input.min_velocity = Some([-2.0, -0.5, -3.0]);
+    input.min_acceleration = Some([-2.0, -2.0, -2.0]);
 
     let mut max_calculation_duration = 0.0;
 

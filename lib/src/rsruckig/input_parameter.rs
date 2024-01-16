@@ -1,10 +1,8 @@
 use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::util::join;
 use std::fmt;
-use std::ops::Deref;
-use std::vec::Vec;
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Default, Clone, PartialEq, Copy)]
 pub enum ControlInterface {
     #[default]
     Position,
@@ -12,7 +10,7 @@ pub enum ControlInterface {
     Acceleration,
 }
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Default, Clone, PartialEq, Copy)]
 pub enum Synchronization {
     #[default]
     Time,
@@ -28,32 +26,58 @@ pub enum DurationDiscretization {
     Discrete,
 }
 
-#[derive(Default, Clone)]
-pub struct InputParameter {
-    pub degrees_of_freedom: usize,
+#[derive(Clone)]
+pub struct InputParameter<const DOF: usize> {
     pub control_interface: ControlInterface,
     pub synchronization: Synchronization,
     pub duration_discretization: DurationDiscretization,
-    pub current_position: Vec<f64>,
-    pub current_velocity: Vec<f64>,
-    pub current_acceleration: Vec<f64>,
-    pub target_position: Vec<f64>,
-    pub target_velocity: Vec<f64>,
-    pub target_acceleration: Vec<f64>,
-    pub max_velocity: Vec<f64>,
-    pub max_acceleration: Vec<f64>,
-    pub max_jerk: Vec<f64>,
-    pub min_velocity: Option<Vec<f64>>,
-    pub min_acceleration: Option<Vec<f64>>,
-    pub enabled: Vec<bool>,
-    pub per_dof_control_interface: Option<Vec<ControlInterface>>,
-    pub per_dof_synchronization: Option<Vec<Synchronization>>,
+    pub current_position: [f64; DOF],
+    pub current_velocity: [f64; DOF],
+    pub current_acceleration: [f64; DOF],
+    pub target_position: [f64; DOF],
+    pub target_velocity: [f64; DOF],
+    pub target_acceleration: [f64; DOF],
+    pub max_velocity: [f64; DOF],
+    pub max_acceleration: [f64; DOF],
+    pub max_jerk: [f64; DOF],
+    pub min_velocity: Option<[f64; DOF]>,
+    pub min_acceleration: Option<[f64; DOF]>,
+    pub enabled: [bool; DOF],
+    pub per_dof_control_interface: Option<[ControlInterface; DOF]>,
+    pub per_dof_synchronization: Option<[Synchronization; DOF]>,
     pub minimum_duration: Option<f64>,
-    pub per_section_minimum_duration: Option<Vec<f64>>,
+    pub per_section_minimum_duration: Option<[f64; DOF]>,
     pub interrupt_calculation_duration: Option<f64>,
 }
 
-impl PartialEq for InputParameter {
+impl<const DOF: usize> Default for InputParameter<DOF> {
+    fn default() -> Self {
+        Self {
+            control_interface: Default::default(),
+            synchronization: Default::default(),
+            duration_discretization: Default::default(),
+            current_position: [0.; DOF],
+            current_velocity: [0.; DOF],
+            current_acceleration: [0.; DOF],
+            target_position: [0.; DOF],
+            target_velocity: [0.; DOF],
+            target_acceleration: [0.; DOF],
+            max_velocity: [0.; DOF],
+            max_acceleration: [0.; DOF],
+            max_jerk: [0.; DOF],
+            min_velocity: Default::default(),
+            min_acceleration: Default::default(),
+            enabled: [true; DOF],
+            per_dof_control_interface: Default::default(),
+            per_dof_synchronization: Default::default(),
+            minimum_duration: Default::default(),
+            per_section_minimum_duration: Default::default(),
+            interrupt_calculation_duration: Default::default(),
+        }
+    }
+}
+
+impl<const DOF: usize> PartialEq for InputParameter<DOF> {
     fn eq(&self, other: &Self) -> bool {
         self.current_position == other.current_position
             && self.current_velocity == other.current_velocity
@@ -77,25 +101,24 @@ impl PartialEq for InputParameter {
     }
 }
 
-impl InputParameter {
-    pub fn new(dofs: usize) -> Self {
+impl<const DOF: usize> InputParameter<DOF> {
+    pub fn new() -> Self {
         Self {
-            degrees_of_freedom: dofs,
             control_interface: ControlInterface::Position,
             synchronization: Synchronization::Time,
             duration_discretization: DurationDiscretization::Continuous,
-            current_position: vec![0.0; dofs],
-            current_velocity: vec![0.0; dofs],
-            current_acceleration: vec![0.0; dofs],
-            target_position: vec![0.0; dofs],
-            target_velocity: vec![0.0; dofs],
-            target_acceleration: vec![0.0; dofs],
-            max_velocity: vec![0.0; dofs],
-            max_acceleration: vec![f64::INFINITY; dofs],
-            max_jerk: vec![f64::INFINITY; dofs],
+            current_position: [0.0; DOF],
+            current_velocity: [0.0; DOF],
+            current_acceleration: [0.0; DOF],
+            target_position: [0.0; DOF],
+            target_velocity: [0.0; DOF],
+            target_acceleration: [0.0; DOF],
+            max_velocity: [0.0; DOF],
+            max_acceleration: [f64::INFINITY; DOF],
+            max_jerk: [f64::INFINITY; DOF],
             min_velocity: None,
             min_acceleration: None,
-            enabled: vec![true; dofs],
+            enabled: [true; DOF],
             per_dof_control_interface: None,
             per_dof_synchronization: None,
             minimum_duration: None,
@@ -115,7 +138,7 @@ impl InputParameter {
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<bool, RuckigError> {
-        for dof in 0..self.degrees_of_freedom {
+        for dof in 0..DOF {
             let j_max = self.max_jerk[dof];
             if j_max.is_nan() || j_max < 0.0 {
                 return E::handle_validation_error(&format!(
@@ -130,8 +153,8 @@ impl InputParameter {
             }
 
             let a_min: f64 = match &self.min_acceleration {
-                Some(min_acc) => min_acc.deref()[dof],
-                None => -self.max_acceleration.deref()[dof],
+                Some(min_acc) => min_acc[dof],
+                None => -self.max_acceleration[dof],
             };
             if a_min.is_nan() || a_min > 0.0 {
                 return E::handle_validation_error(&format!("minimum acceleration limit {} of DoF {} should be smaller than or equal to zero.", a_min, dof));
@@ -249,27 +272,31 @@ impl InputParameter {
                     }
                 }
                 if check_current_state_within_limits {
-                    if a0 > 0.0 && j_max > 0.0 && InputParameter::v_at_a_zero(v0, a0, j_max) > v_max
+                    if a0 > 0.0
+                        && j_max > 0.0
+                        && InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max) > v_max
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, j_max), v_max));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max), v_max));
                     }
                     if a0 < 0.0
                         && j_max > 0.0
-                        && InputParameter::v_at_a_zero(v0, a0, -j_max) < v_min
+                        && InputParameter::<DOF>::v_at_a_zero(v0, a0, -j_max) < v_min
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, -j_max), v_min));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(v0, a0, -j_max), v_min));
                     }
                 }
                 if check_target_state_within_limits {
-                    if af < 0.0 && j_max > 0.0 && InputParameter::v_at_a_zero(vf, af, j_max) > v_max
+                    if af < 0.0
+                        && j_max > 0.0
+                        && InputParameter::<DOF>::v_at_a_zero(vf, af, j_max) > v_max
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, j_max), v_max));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(vf, af, j_max), v_max));
                     }
                     if af > 0.0
                         && j_max > 0.0
-                        && InputParameter::v_at_a_zero(vf, af, -j_max) < v_min
+                        && InputParameter::<DOF>::v_at_a_zero(vf, af, -j_max) < v_min
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, -j_max), v_min));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(vf, af, -j_max), v_min));
                     }
                 }
             }
@@ -278,9 +305,9 @@ impl InputParameter {
     }
 }
 
-impl fmt::Display for InputParameter {
+impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "")?;
+        writeln!(f)?;
 
         if self.control_interface == ControlInterface::Velocity {
             writeln!(f, "inp.control_interface = ControlInterface.Velocity")?;
@@ -300,54 +327,46 @@ impl fmt::Display for InputParameter {
         writeln!(
             f,
             "\ninp.current_position = [{}]",
-            join(self.current_position.deref(), true)
+            join(&self.current_position, true)
         )?;
         writeln!(
             f,
             "inp.current_velocity = [{}]",
-            join(self.current_velocity.deref(), true)
+            join(&self.current_velocity, true)
         )?;
         writeln!(
             f,
             "inp.current_acceleration = [{}]",
-            join(self.current_acceleration.deref(), true)
+            join(&self.current_acceleration, true)
         )?;
         writeln!(
             f,
             "inp.target_position = [{}]",
-            join(self.target_position.deref(), true)
+            join(&self.target_position, true)
         )?;
         writeln!(
             f,
             "inp.target_velocity = [{}]",
-            join(self.target_velocity.deref(), true)
+            join(&self.target_velocity, true)
         )?;
         writeln!(
             f,
             "inp.target_acceleration = [{}]",
-            join(self.target_acceleration.deref(), true)
+            join(&self.target_acceleration, true)
         )?;
-        writeln!(
-            f,
-            "inp.max_velocity = [{}]",
-            join(self.max_velocity.deref(), true)
-        )?;
+        writeln!(f, "inp.max_velocity = [{}]", join(&self.max_velocity, true))?;
         writeln!(
             f,
             "inp.max_acceleration = [{}]",
-            join(self.max_acceleration.deref(), true)
+            join(&self.max_acceleration, true)
         )?;
-        writeln!(f, "inp.max_jerk = [{}]", join(self.max_jerk.deref(), true))?;
+        writeln!(f, "inp.max_jerk = [{}]", join(&self.max_jerk, true))?;
 
         if let Some(min_vel) = &self.min_velocity {
-            writeln!(f, "inp.min_velocity = [{}]", join(min_vel.deref(), true))?;
+            writeln!(f, "inp.min_velocity = [{}]", join(min_vel, true))?;
         }
         if let Some(min_acc) = &self.min_acceleration {
-            writeln!(
-                f,
-                "inp.min_acceleration = [{}]",
-                join(min_acc.deref(), true)
-            )?;
+            writeln!(f, "inp.min_acceleration = [{}]", join(min_acc, true))?;
         }
 
         Ok(())

@@ -69,14 +69,20 @@ where
     }
 }
 
-fn _check_update<E: RuckigErrorHandler>(otg: &mut Ruckig<E>, input: &InputParameter) -> f64 {
-    let mut output = OutputParameter::new(input.degrees_of_freedom);
+fn _check_update<const DOF: usize, E: RuckigErrorHandler>(
+    otg: &mut Ruckig<DOF, E>,
+    input: &InputParameter<DOF>,
+) -> f64 {
+    let mut output = OutputParameter::new();
     let _result = otg.update(input, &mut output);
     output.calculation_duration
 }
 
-fn check_calculation<E: RuckigErrorHandler>(otg: &mut Ruckig<E>, input: &InputParameter) -> f64 {
-    let mut traj = Trajectory::new(input.degrees_of_freedom);
+fn check_calculation<const DOF: usize, E: RuckigErrorHandler>(
+    otg: &mut Ruckig<DOF, E>,
+    input: &InputParameter<DOF>,
+) -> f64 {
+    let mut traj = Trajectory::new();
     let start = Instant::now();
     let _result = otg.calculate(input, &mut traj);
     let stop = Instant::now();
@@ -99,13 +105,12 @@ fn analyse(v: &Vec<f64>) -> (f64, f64) {
     (mean, std_deviation)
 }
 
-fn benchmark(
+fn benchmark<const DOF: usize>(
     n: &mut usize,
     number_of_trajectories: i64,
-    degrees_of_freedom: usize,
     verbose: bool,
 ) -> BenchmarkResults {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(degrees_of_freedom, 0.005);
+    let mut otg = Ruckig::<DOF, ThrowErrorHandler>::new(0.005);
 
     let position_dist = Normal::new(0.0, 4.0).unwrap();
     let dynamic_dist = Normal::new(0.0, 0.8).unwrap();
@@ -115,7 +120,7 @@ fn benchmark(
     let mut dynamic_randomizer = Randomizer::new(dynamic_dist, 43);
     let mut limit_randomizer = Randomizer::new(limit_dist, 44);
 
-    let mut input = InputParameter::new(degrees_of_freedom);
+    let mut input = InputParameter::new();
 
     let mut average: Vec<f64> = Vec::new();
     let mut worst: Vec<f64> = Vec::new();
@@ -172,7 +177,7 @@ fn benchmark(
         println!("--------------------------------------------------");
         println!(
             "Benchmark for {} DoFs on {} trajectories",
-            degrees_of_freedom, number_of_trajectories
+            DOF, number_of_trajectories
         );
         println!(
             "Average calculation duration {:.4} pm {:.4} [µs]",
@@ -188,7 +193,7 @@ fn benchmark(
         );
     }
     BenchmarkResults {
-        degrees_of_freedom,
+        degrees_of_freedom: DOF,
         number_of_trajectories,
         average_mean,
         average_std,
@@ -252,7 +257,6 @@ fn main() {
     let mut n = 2 * 5;
     let number_of_trajectories = 4 * 64 * 1024;
 
-    let dofs = 3;
-    let results = benchmark(&mut n, number_of_trajectories, dofs, true);
+    let results = benchmark::<3>(&mut n, number_of_trajectories, true);
     plot_benchmark_results(results);
 }

@@ -9,28 +9,26 @@ use crate::trajectory::Trajectory;
 use std::marker::PhantomData;
 use std::time::Instant;
 
-pub struct Ruckig<E: RuckigErrorHandler> {
-    current_input: InputParameter,
+pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
+    current_input: InputParameter<DOF>,
     current_input_initialized: bool,
-    pub calculator: TargetCalculator,
-    pub degrees_of_freedom: usize,
+    pub calculator: TargetCalculator<DOF>,
     pub delta_time: f64,
     _error_handler: PhantomData<E>,
 }
 
-impl<E: RuckigErrorHandler> Default for Ruckig<E> {
+impl<const DOF: usize, E: RuckigErrorHandler> Default for Ruckig<DOF, E> {
     fn default() -> Self {
-        Self::new(1, 0.01)
+        Self::new(0.01)
     }
 }
 
-impl<E: RuckigErrorHandler> Ruckig<E> {
-    pub fn new(degrees_of_freedom: usize, delta_time: f64) -> Self {
+impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
+    pub fn new(delta_time: f64) -> Self {
         Self {
-            current_input: InputParameter::new(degrees_of_freedom),
+            current_input: InputParameter::new(),
             current_input_initialized: false,
-            calculator: TargetCalculator::new(degrees_of_freedom),
-            degrees_of_freedom,
+            calculator: TargetCalculator::new(),
             delta_time,
             _error_handler: PhantomData,
         }
@@ -43,7 +41,7 @@ impl<E: RuckigErrorHandler> Ruckig<E> {
     /// Validate the input as well as the Ruckig instance for trajectory calculation
     pub fn validate_input(
         &self,
-        input: &InputParameter,
+        input: &InputParameter<DOF>,
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<bool, RuckigError> {
@@ -68,8 +66,8 @@ impl<E: RuckigErrorHandler> Ruckig<E> {
 
     pub fn calculate(
         &mut self,
-        input: &InputParameter,
-        traj: &mut Trajectory,
+        input: &InputParameter<DOF>,
+        traj: &mut Trajectory<DOF>,
     ) -> Result<RuckigResult, RuckigError> {
         self.validate_input(input, false, true)?;
 
@@ -78,20 +76,10 @@ impl<E: RuckigErrorHandler> Ruckig<E> {
 
     pub fn update(
         &mut self,
-        input: &InputParameter,
-        output: &mut OutputParameter,
+        input: &InputParameter<DOF>,
+        output: &mut OutputParameter<DOF>,
     ) -> Result<RuckigResult, RuckigError> {
         let start = Instant::now();
-
-        if self.degrees_of_freedom == 0
-            && (self.degrees_of_freedom != input.degrees_of_freedom
-                || self.degrees_of_freedom != output.degrees_of_freedom)
-        {
-            return E::handle_calculator_error(
-                "mismatch in degrees of freedom (vector size).",
-                RuckigResult::Error,
-            );
-        }
 
         output.new_calculation = false;
 
