@@ -1,39 +1,25 @@
 use crate::profile::Bound;
 use crate::profile::Profile;
-use crate::util::{integrate, DataArrayOrVec};
+use crate::util::integrate;
 
 // We'll use Vec<T> instead of CustomVector<T, DOFs>
-#[derive(Clone)]
-pub struct Trajectory<const DOFs: usize> {
-    pub profiles: Vec<DataArrayOrVec<Profile, DOFs>>,
+#[derive(Clone, Default)]
+pub struct Trajectory {
+    pub profiles: Vec<Vec<Profile>>,
     pub duration: f64,
-    pub cumulative_times: DataArrayOrVec<f64, DOFs>,
-    pub independent_min_durations: DataArrayOrVec<f64, DOFs>,
-    position_extrema: DataArrayOrVec<Bound, DOFs>,
+    pub cumulative_times: Vec<f64>,
+    pub independent_min_durations: Vec<f64>,
+    position_extrema: Vec<Bound>,
     degrees_of_freedom: usize,
     continue_calculation_counter: usize,
 }
 
-impl<const DOFs: usize> Default for Trajectory<DOFs> {
-    fn default() -> Self {
+impl Trajectory {
+    pub fn new(dofs: usize) -> Self {
         Self {
-            profiles: Default::default(),
-            duration: Default::default(),
-            cumulative_times: DataArrayOrVec::default(),
-            independent_min_durations: DataArrayOrVec::default(),
-            position_extrema: DataArrayOrVec::default(),
-            degrees_of_freedom: 1,
-            continue_calculation_counter: 0,
-        }
-    }
-}
-
-impl<const DOFs: usize> Trajectory<DOFs> {
-    pub fn new(dofs: Option<usize>) -> Self {
-        Self {
-            profiles: vec![DataArrayOrVec::new(dofs, Profile::default())],
+            profiles: vec![vec![Profile::default(); dofs]],
             duration: 0.0,
-            cumulative_times: DataArrayOrVec::new(dofs, 0.0),
+            cumulative_times: vec![0.0; dofs],
             independent_min_durations: vec![0.0; dofs],
             position_extrema: vec![Bound::default(); dofs],
             degrees_of_freedom: dofs,

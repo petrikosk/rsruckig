@@ -1,5 +1,5 @@
 use crate::error::{RuckigError, RuckigErrorHandler};
-use crate::util::{join, DataArrayOrVec};
+use crate::util::join;
 use std::fmt;
 use std::ops::Deref;
 use std::vec::Vec;
@@ -29,31 +29,31 @@ pub enum DurationDiscretization {
 }
 
 #[derive(Default, Clone)]
-pub struct InputParameter<const DOFs: usize> {
+pub struct InputParameter {
     pub degrees_of_freedom: usize,
     pub control_interface: ControlInterface,
     pub synchronization: Synchronization,
     pub duration_discretization: DurationDiscretization,
-    pub current_position: DataArrayOrVec<f64, DOFs>,
-    pub current_velocity: DataArrayOrVec<f64, DOFs>,
-    pub current_acceleration: DataArrayOrVec<f64, DOFs>,
-    pub target_position: DataArrayOrVec<f64, DOFs>,
-    pub target_velocity: DataArrayOrVec<f64, DOFs>,
-    pub target_acceleration: DataArrayOrVec<f64, DOFs>,
-    pub max_velocity: DataArrayOrVec<f64, DOFs>,
-    pub max_acceleration: DataArrayOrVec<f64, DOFs>,
-    pub max_jerk: DataArrayOrVec<f64, DOFs>,
-    pub min_velocity: Option<DataArrayOrVec<f64, DOFs>>,
-    pub min_acceleration: Option<DataArrayOrVec<f64, DOFs>>,
-    pub enabled: DataArrayOrVec<bool, DOFs>,
+    pub current_position: Vec<f64>,
+    pub current_velocity: Vec<f64>,
+    pub current_acceleration: Vec<f64>,
+    pub target_position: Vec<f64>,
+    pub target_velocity: Vec<f64>,
+    pub target_acceleration: Vec<f64>,
+    pub max_velocity: Vec<f64>,
+    pub max_acceleration: Vec<f64>,
+    pub max_jerk: Vec<f64>,
+    pub min_velocity: Option<Vec<f64>>,
+    pub min_acceleration: Option<Vec<f64>>,
+    pub enabled: Vec<bool>,
     pub per_dof_control_interface: Option<Vec<ControlInterface>>,
     pub per_dof_synchronization: Option<Vec<Synchronization>>,
     pub minimum_duration: Option<f64>,
-    pub per_section_minimum_duration: Option<DataArrayOrVec<f64, DOFs>>,
+    pub per_section_minimum_duration: Option<Vec<f64>>,
     pub interrupt_calculation_duration: Option<f64>,
 }
 
-impl<const DOFs: usize, T: PartialEq> PartialEq for InputParameter<DOFs> {
+impl PartialEq for InputParameter {
     fn eq(&self, other: &Self) -> bool {
         self.current_position == other.current_position
             && self.current_velocity == other.current_velocity
@@ -77,25 +77,25 @@ impl<const DOFs: usize, T: PartialEq> PartialEq for InputParameter<DOFs> {
     }
 }
 
-impl<const DOFs: usize> InputParameter<DOFs> {
-    pub fn new(dofs: Option<usize>) -> Self {
+impl InputParameter {
+    pub fn new(dofs: usize) -> Self {
         Self {
-            degrees_of_freedom: dofs.unwrap_or(DOFs),
+            degrees_of_freedom: dofs,
             control_interface: ControlInterface::Position,
             synchronization: Synchronization::Time,
             duration_discretization: DurationDiscretization::Continuous,
-            current_position: DataArrayOrVec::new(dofs, 0.0),
-            current_velocity: DataArrayOrVec::new(dofs, 0.0),
-            current_acceleration: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            target_position: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            target_velocity: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            target_acceleration: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            max_velocity: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            max_acceleration: DataArrayOrVec::<f64, DOFs>::new(dofs, f64::INFINITY),
-            max_jerk: DataArrayOrVec::<f64, DOFs>::new(dofs, f64::INFINITY),
-            enabled: DataArrayOrVec::<bool, DOFs>::new(dofs, true),
+            current_position: vec![0.0; dofs],
+            current_velocity: vec![0.0; dofs],
+            current_acceleration: vec![0.0; dofs],
+            target_position: vec![0.0; dofs],
+            target_velocity: vec![0.0; dofs],
+            target_acceleration: vec![0.0; dofs],
+            max_velocity: vec![0.0; dofs],
+            max_acceleration: vec![f64::INFINITY; dofs],
+            max_jerk: vec![f64::INFINITY; dofs],
             min_velocity: None,
             min_acceleration: None,
+            enabled: vec![true; dofs],
             per_dof_control_interface: None,
             per_dof_synchronization: None,
             minimum_duration: None,
