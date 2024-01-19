@@ -30,7 +30,7 @@ impl<const DOFs: usize, E: RuckigErrorHandler> Ruckig<DOFs, E> {
             current_input: InputParameter::new(degrees_of_freedom),
             current_input_initialized: false,
             calculator: TargetCalculator::new(degrees_of_freedom),
-            degrees_of_freedom: degrees_of_freedom.unwrap_or(DOFs),
+            degrees_of_freedom,
             delta_time,
             _error_handler: PhantomData,
         }
