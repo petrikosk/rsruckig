@@ -9,8 +9,8 @@ use crate::trajectory::Trajectory;
 use std::marker::PhantomData;
 use std::time::Instant;
 
-pub struct Ruckig<E: RuckigErrorHandler> {
-    current_input: InputParameter,
+pub struct Ruckig<const DOFs: usize, E: RuckigErrorHandler> {
+    current_input: InputParameter<DOFs>,
     current_input_initialized: bool,
     pub calculator: TargetCalculator,
     pub degrees_of_freedom: usize,
@@ -18,14 +18,14 @@ pub struct Ruckig<E: RuckigErrorHandler> {
     _error_handler: PhantomData<E>,
 }
 
-impl<E: RuckigErrorHandler> Default for Ruckig<E> {
+impl<const DOFs: usize, E: RuckigErrorHandler> Default for Ruckig<DOFs, E> {
     fn default() -> Self {
-        Self::new(1, 0.01)
+        Self::new(None, 0.01)
     }
 }
 
-impl<E: RuckigErrorHandler> Ruckig<E> {
-    pub fn new(degrees_of_freedom: usize, delta_time: f64) -> Self {
+impl<const DOFs: usize, E: RuckigErrorHandler> Ruckig<DOFs, E> {
+    pub fn new(degrees_of_freedom: Option<usize>, delta_time: f64) -> Self {
         Self {
             current_input: InputParameter::new(degrees_of_freedom),
             current_input_initialized: false,
@@ -43,7 +43,7 @@ impl<E: RuckigErrorHandler> Ruckig<E> {
     /// Validate the input as well as the Ruckig instance for trajectory calculation
     pub fn validate_input(
         &self,
-        input: &InputParameter,
+        input: &InputParameter<DOFs>,
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<bool, RuckigError> {
@@ -68,7 +68,7 @@ impl<E: RuckigErrorHandler> Ruckig<E> {
 
     pub fn calculate(
         &mut self,
-        input: &InputParameter,
+        input: &InputParameter<DOFs>,
         traj: &mut Trajectory,
     ) -> Result<RuckigResult, RuckigError> {
         self.validate_input(input, false, true)?;
@@ -78,7 +78,7 @@ impl<E: RuckigErrorHandler> Ruckig<E> {
 
     pub fn update(
         &mut self,
-        input: &InputParameter,
+        input: &InputParameter<DOFs>,
         output: &mut OutputParameter,
     ) -> Result<RuckigResult, RuckigError> {
         let start = Instant::now();
