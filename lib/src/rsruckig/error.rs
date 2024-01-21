@@ -1,14 +1,9 @@
 use crate::result::RuckigResult;
-use std::{
-    error::Error,
-    fmt::{self},
-};
+use std::fmt;
 
 pub struct RuckigError {
     message: String,
 }
-
-impl Error for RuckigError {}
 
 impl RuckigError {
     pub fn new(message: String) -> RuckigError {
