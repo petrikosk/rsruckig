@@ -161,8 +161,6 @@ dynamic_data[2] = 0.7;
 
 To go into more detail, the *InputParameter* type has following members:
 
-```.rs
-
 current_position: DataArrayOrVec<f64, DOF>;
 current_velocity: DataArrayOrVec<f64, DOF>; // Initialized to zero
 current_acceleration: DataArrayOrVec<f64, DOF>; // Initialized to zero
