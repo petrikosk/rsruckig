@@ -3,9 +3,9 @@ use gnuplot::{AxesCommon, Caption, Figure};
 use rsruckig::prelude::*;
 
 fn main() {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(1, 0.01);
-    let mut input = InputParameter::new(1);
-    let mut output: OutputParameter = OutputParameter::new(1);
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
 
     input.current_position[0] = 0.0;
     input.current_velocity[0] = 7.0;

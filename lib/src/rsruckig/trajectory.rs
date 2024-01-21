@@ -2,19 +2,18 @@ use crate::profile::Bound;
 use crate::profile::Profile;
 use crate::util::{integrate, DataArrayOrVec};
 
-// We'll use Vec<T> instead of CustomVector<T, DOFs>
+// We'll use Vec<T> instead of CustomVector<T, DOF>
 #[derive(Clone)]
-pub struct Trajectory<const DOFs: usize> {
-    pub profiles: Vec<DataArrayOrVec<Profile, DOFs>>,
+pub struct Trajectory<const DOF: usize> {
+    pub profiles: Vec<DataArrayOrVec<Profile, DOF>>,
     pub duration: f64,
-    pub cumulative_times: DataArrayOrVec<f64, DOFs>,
-    pub independent_min_durations: DataArrayOrVec<f64, DOFs>,
-    position_extrema: DataArrayOrVec<Bound, DOFs>,
+    pub cumulative_times: DataArrayOrVec<f64, DOF>,
+    pub independent_min_durations: DataArrayOrVec<f64, DOF>,
+    position_extrema: DataArrayOrVec<Bound, DOF>,
     degrees_of_freedom: usize,
-    continue_calculation_counter: usize,
 }
 
-impl<const DOFs: usize> Default for Trajectory<DOFs> {
+impl<const DOF: usize> Default for Trajectory<DOF> {
     fn default() -> Self {
         Self {
             profiles: Default::default(),
@@ -23,22 +22,21 @@ impl<const DOFs: usize> Default for Trajectory<DOFs> {
             independent_min_durations: DataArrayOrVec::default(),
             position_extrema: DataArrayOrVec::default(),
             degrees_of_freedom: 1,
-            continue_calculation_counter: 0,
         }
     }
 }
 
-impl<const DOFs: usize> Trajectory<DOFs> {
+impl<const DOF: usize> Trajectory<DOF> {
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
-            profiles: vec![DataArrayOrVec::new(dofs, Profile::default())],
+            profiles: vec![DataArrayOrVec::<Profile, DOF>::new(dofs, Profile::default())],
             duration: 0.0,
             cumulative_times: DataArrayOrVec::new(dofs, 0.0),
-            independent_min_durations: vec![0.0; dofs],
-            position_extrema: vec![Bound::default(); dofs],
-            degrees_of_freedom: dofs,
-            continue_calculation_counter: 0,
+            independent_min_durations: DataArrayOrVec::new(dofs, 0.0),
+            position_extrema: DataArrayOrVec::new(dofs, Bound::default()),
+            degrees_of_freedom: dofs.unwrap_or(DOF),
         }
+
     }
     pub fn state_to_integrate_from<F>(
         &self,
@@ -140,40 +138,13 @@ impl<const DOFs: usize> Trajectory<DOFs> {
         }
     }
 
-    // Equivalent to the C++ constructor with D == 0
-    pub fn with_dofs(dofs: usize) -> Self {
-        let mut traj = Trajectory {
-            degrees_of_freedom: dofs,
-            profiles: Vec::new(),
-            duration: 0.0,
-            cumulative_times: Vec::new(),
-            independent_min_durations: Vec::new(),
-            position_extrema: Vec::new(),
-            continue_calculation_counter: 0,
-        };
-        traj.resize_for_dofs(dofs);
-        traj
-    }
-
-    // This is a helper method for resizing based on dofs
-    fn resize_for_dofs(&mut self, dofs: usize) {
-        // Do the necessary resizing. Assuming `profiles` and others are Vecs:
-        self.profiles[0].resize(dofs, Default::default());
-        self.independent_min_durations.resize(dofs, 0.0);
-        self.position_extrema.resize(dofs, Default::default());
-        self.cumulative_times.resize(dofs, 0.0);
-        self.continue_calculation_counter = 0;
-        self.degrees_of_freedom = dofs;
-        self.duration = 0.0;
-    }
-
     pub fn at_time(
         &self,
         time: f64,
-        new_position: &mut Option<&mut Vec<f64>>,
-        new_velocity: &mut Option<&mut Vec<f64>>,
-        new_acceleration: &mut Option<&mut Vec<f64>>,
-        new_jerk: &mut Option<&mut Vec<f64>>,
+        new_position: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
+        new_velocity: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
+        new_acceleration: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
+        new_jerk: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
         new_section: &mut Option<usize>,
     ) {
         new_section.get_or_insert(0);
@@ -200,7 +171,7 @@ impl<const DOFs: usize> Trajectory<DOFs> {
         }
     }
 
-    pub fn get_profiles(&self) -> &Vec<Vec<Profile>> {
+    pub fn get_profiles(&self) -> &Vec<DataArrayOrVec<Profile, { DOF }>> {
         &self.profiles
     }
 
@@ -208,15 +179,15 @@ impl<const DOFs: usize> Trajectory<DOFs> {
         self.duration
     }
 
-    pub fn get_intermediate_durations(&self) -> &Vec<f64> {
+    pub fn get_intermediate_durations(&self) -> &DataArrayOrVec<f64, { DOF }> {
         &self.cumulative_times
     }
 
-    pub fn get_independent_min_durations(&self) -> &Vec<f64> {
+    pub fn get_independent_min_durations(&self) -> &DataArrayOrVec<f64, { DOF }> {
         &self.independent_min_durations
     }
 
-    pub fn get_position_extrema(&mut self) -> &Vec<Bound> {
+    pub fn get_position_extrema(&mut self) -> &DataArrayOrVec<Bound, { DOF }> {
         for dof in 0..self.degrees_of_freedom {
             self.position_extrema[dof] = self.profiles[0][dof].get_position_extrema();
         }

@@ -9,28 +9,28 @@ use crate::trajectory::Trajectory;
 use std::marker::PhantomData;
 use std::time::Instant;
 
-pub struct Ruckig<const DOFs: usize, E: RuckigErrorHandler> {
-    current_input: InputParameter<DOFs>,
+pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
+    current_input: InputParameter<DOF>,
     current_input_initialized: bool,
-    pub calculator: TargetCalculator,
+    pub calculator: TargetCalculator<DOF>,
     pub degrees_of_freedom: usize,
     pub delta_time: f64,
     _error_handler: PhantomData<E>,
 }
 
-impl<const DOFs: usize, E: RuckigErrorHandler> Default for Ruckig<DOFs, E> {
+impl<const DOF: usize, E: RuckigErrorHandler> Default for Ruckig<DOF, E> {
     fn default() -> Self {
         Self::new(None, 0.01)
     }
 }
 
-impl<const DOFs: usize, E: RuckigErrorHandler> Ruckig<DOFs, E> {
+impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     pub fn new(degrees_of_freedom: Option<usize>, delta_time: f64) -> Self {
         Self {
             current_input: InputParameter::new(degrees_of_freedom),
             current_input_initialized: false,
             calculator: TargetCalculator::new(degrees_of_freedom),
-            degrees_of_freedom,
+            degrees_of_freedom: degrees_of_freedom.unwrap_or(DOF),
             delta_time,
             _error_handler: PhantomData,
         }
@@ -43,7 +43,7 @@ impl<const DOFs: usize, E: RuckigErrorHandler> Ruckig<DOFs, E> {
     /// Validate the input as well as the Ruckig instance for trajectory calculation
     pub fn validate_input(
         &self,
-        input: &InputParameter<DOFs>,
+        input: &InputParameter<DOF>,
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<bool, RuckigError> {
@@ -68,8 +68,8 @@ impl<const DOFs: usize, E: RuckigErrorHandler> Ruckig<DOFs, E> {
 
     pub fn calculate(
         &mut self,
-        input: &InputParameter<DOFs>,
-        traj: &mut Trajectory,
+        input: &InputParameter<DOF>,
+        traj: &mut Trajectory<DOF>,
     ) -> Result<RuckigResult, RuckigError> {
         self.validate_input(input, false, true)?;
 
@@ -78,8 +78,8 @@ impl<const DOFs: usize, E: RuckigErrorHandler> Ruckig<DOFs, E> {
 
     pub fn update(
         &mut self,
-        input: &InputParameter<DOFs>,
-        output: &mut OutputParameter,
+        input: &InputParameter<DOF>,
+        output: &mut OutputParameter<DOF>,
     ) -> Result<RuckigResult, RuckigError> {
         let start = Instant::now();
 

@@ -17,43 +17,44 @@ use crate::{
     velocity_third_step1::VelocityThirdOrderStep1,
     velocity_third_step2::VelocityThirdOrderStep2,
 };
+use crate::util::DataArrayOrVec;
 
-#[derive(Default)]
-pub struct TargetCalculator {
+#[derive(Default, Debug)]
+pub struct TargetCalculator<const DOF: usize> {
     eps: f64,
     return_error_at_maximal_duration: bool,
-    new_phase_control: Vec<f64>,
-    pd: Vec<f64>,
+    new_phase_control: DataArrayOrVec<f64, DOF>,
+    pd: DataArrayOrVec<f64, DOF>,
     possible_t_syncs: Vec<f64>,
     idx: Vec<usize>,
-    blocks: Vec<Block>,
-    inp_min_velocity: Vec<f64>,
-    inp_min_acceleration: Vec<f64>,
-    inp_per_dof_control_interface: Vec<ControlInterface>,
-    inp_per_dof_synchronization: Vec<Synchronization>,
+    blocks: DataArrayOrVec<Block, DOF>,
+    inp_min_velocity: DataArrayOrVec<f64, DOF>,
+    inp_min_acceleration: DataArrayOrVec<f64, DOF>,
+    inp_per_dof_control_interface: DataArrayOrVec<ControlInterface, DOF>,
+    inp_per_dof_synchronization: DataArrayOrVec<Synchronization, DOF>,
     pub degrees_of_freedom: usize,
 }
 
-impl TargetCalculator {
-    pub fn new(dofs: usize) -> Self {
+impl<const DOF: usize> TargetCalculator<DOF> {
+    pub fn new(dofs: Option<usize>) -> Self {
         Self {
-            blocks: vec![Block::default(); dofs],
-            inp_min_velocity: vec![0.0; dofs],
-            inp_min_acceleration: vec![0.0; dofs],
-            inp_per_dof_control_interface: vec![ControlInterface::default(); dofs],
-            inp_per_dof_synchronization: vec![Synchronization::default(); dofs],
-            new_phase_control: vec![0.0; dofs],
-            pd: vec![0.0; dofs],
-            possible_t_syncs: vec![0.0; 3 * dofs + 1],
-            idx: vec![0; 3 * dofs + 1],
+            blocks: DataArrayOrVec::new(dofs, Block::default()),
+            inp_min_velocity: DataArrayOrVec::new(dofs, 0.0),
+            inp_min_acceleration: DataArrayOrVec::new(dofs, 0.0),
+            inp_per_dof_control_interface: DataArrayOrVec::new(dofs, ControlInterface::default()),
+            inp_per_dof_synchronization: DataArrayOrVec::new(dofs, Synchronization::default()),
+            new_phase_control: DataArrayOrVec::new(dofs, 0.0),
+            pd: DataArrayOrVec::new(dofs, 0.0),
+            possible_t_syncs: vec![0.0; 3 * dofs.unwrap_or(DOF) + 1],
+            idx: vec![0; 3 * dofs.unwrap_or(DOF) + 1],
             eps: f64::EPSILON,
             return_error_at_maximal_duration: true,
-            degrees_of_freedom: dofs,
+            degrees_of_freedom: dofs.unwrap_or(DOF),
         }
     }
     fn is_input_collinear(
         &mut self,
-        inp: &InputParameter,
+        inp: &InputParameter<DOF>,
         limiting_direction: Direction,
         limiting_dof: usize,
     ) -> bool {
@@ -62,7 +63,7 @@ impl TargetCalculator {
             self.pd[dof] = inp.target_position[dof] - inp.current_position[dof];
         }
 
-        let mut scale_vector: Option<&Vec<f64>> = None;
+        let mut scale_vector: Option<&DataArrayOrVec<f64, DOF>> = None;
         let mut scale_dof: Option<usize> = None;
         for dof in 0..self.degrees_of_freedom {
             if self.inp_per_dof_synchronization[dof] != Synchronization::Phase {
@@ -146,7 +147,7 @@ impl TargetCalculator {
         t_min: Option<f64>,
         t_sync: &mut f64,
         limiting_dof: &mut Option<usize>,
-        profiles: &mut [Profile],
+        profiles: &mut DataArrayOrVec<Profile, { DOF }>,
         discrete_duration: bool,
         delta_time: f64,
     ) -> bool {
@@ -243,19 +244,19 @@ impl TargetCalculator {
             *limiting_dof = Some(i % self.degrees_of_freedom);
             match div {
                 0 => {
-                    profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()].p_min;
+                    profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()].p_min.clone();
                 }
                 1 => {
                     profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()]
                         .a
-                        .as_ref()
+                        .clone()
                         .unwrap()
                         .profile;
                 }
                 2 => {
                     profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()]
                         .b
-                        .as_ref()
+                        .clone()
                         .unwrap()
                         .profile;
                 }
@@ -270,8 +271,8 @@ impl TargetCalculator {
     /// Calculate the time-optimal waypoint-based trajectory.
     pub fn calculate<T: RuckigErrorHandler>(
         &mut self,
-        inp: &InputParameter,
-        traj: &mut Trajectory,
+        inp: &InputParameter<DOF>,
+        traj: &mut Trajectory<DOF>,
         delta_time: f64,
     ) -> Result<RuckigResult, RuckigError> {
         for dof in 0..self.degrees_of_freedom {
@@ -281,22 +282,25 @@ impl TargetCalculator {
                 .min_velocity
                 .as_ref()
                 .map_or(-inp.max_velocity[dof], |v| v[dof]);
+
             self.inp_min_acceleration[dof] = inp
                 .min_acceleration
                 .as_ref()
                 .map_or(-inp.max_acceleration[dof], |v| v[dof]);
-            self.inp_per_dof_control_interface[dof] =
-                inp.per_dof_control_interface.as_ref().unwrap_or(&vec![
-                    inp.control_interface
-                        .clone();
-                    self.degrees_of_freedom
-                ])[dof]
-                    .clone();
-            self.inp_per_dof_synchronization[dof] = inp
-                .per_dof_synchronization
-                .as_ref()
-                .unwrap_or(&vec![inp.synchronization.clone(); self.degrees_of_freedom])[dof]
-                .clone();
+
+            self.inp_per_dof_control_interface = DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.control_interface.clone());
+            if let Some(per_dof_control_interface) = &inp.per_dof_control_interface {
+                for (dof, value) in per_dof_control_interface.iter().enumerate() {
+                    *self.inp_per_dof_control_interface.get_mut(dof).unwrap() = value.clone();
+                }
+            }
+
+            self.inp_per_dof_synchronization = DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.synchronization.clone());
+            if let Some(per_dof_synchronization) = &inp.per_dof_synchronization {
+                for (dof, value) in per_dof_synchronization.iter().enumerate() {
+                    *self.inp_per_dof_synchronization.get_mut(dof).unwrap() = value.clone();
+                }
+            }
 
             if !inp.enabled[dof] {
                 if let Some(last) = p.p.last_mut() {
@@ -506,7 +510,7 @@ impl TargetCalculator {
         let discrete_duration = inp.duration_discretization == DurationDiscretization::Discrete;
         if self.degrees_of_freedom == 1 && inp.minimum_duration.is_some() && !discrete_duration {
             traj.duration = self.blocks[0].t_min;
-            traj.profiles[0][0] = self.blocks[0].p_min;
+            traj.profiles[0][0] = self.blocks[0].p_min.clone();
             traj.cumulative_times[0] = traj.duration;
             return Ok(RuckigResult::Working);
         }
@@ -549,7 +553,7 @@ impl TargetCalculator {
         // None Synchronization
         for dof in 0..self.degrees_of_freedom {
             if inp.enabled[dof] && self.inp_per_dof_synchronization[dof] == Synchronization::None {
-                traj.profiles[0][dof] = self.blocks[dof].p_min;
+                traj.profiles[0][dof] = self.blocks[dof].p_min.clone();
                 if self.blocks[dof].t_min > traj.duration {
                     traj.duration = self.blocks[dof].t_min;
                     limiting_dof = Some(dof);
@@ -565,7 +569,7 @@ impl TargetCalculator {
         if (traj.duration - 0.0).abs() < f64::EPSILON {
             // Copy all profiles for end state
             for dof in 0..self.degrees_of_freedom {
-                traj.profiles[0][dof] = self.blocks[dof].p_min;
+                traj.profiles[0][dof] = self.blocks[dof].p_min.clone();
             }
             return Ok(RuckigResult::Working);
         }
@@ -586,7 +590,7 @@ impl TargetCalculator {
                 .iter()
                 .any(|s| s == &Synchronization::Phase)
             {
-                let p_limiting = traj.profiles[0][limiting_dof_value];
+                let p_limiting = traj.profiles[0][limiting_dof_value].clone();
                 if self.is_input_collinear(inp, p_limiting.direction, limiting_dof_value) {
                     let mut found_time_synchronization = true;
                     for dof in 0..self.degrees_of_freedom {
@@ -601,7 +605,7 @@ impl TargetCalculator {
                         let t_profile = traj.duration - p.brake.duration - p.accel.duration;
 
                         p.t = p_limiting.t; // Copy timing information from limiting DoF
-                        p.control_signs = p_limiting.control_signs;
+                        p.control_signs = p_limiting.control_signs.clone();
 
                         match self.inp_per_dof_control_interface[dof] {
                             ControlInterface::Position => match p.control_signs {
@@ -756,22 +760,22 @@ impl TargetCalculator {
                 && inp.target_velocity[dof].abs() < self.eps
                 && inp.target_acceleration[dof].abs() < self.eps
             {
-                traj.profiles[0][dof] = self.blocks[dof].p_min;
+                traj.profiles[0][dof] = self.blocks[dof].p_min.clone();
                 continue;
             }
 
             // Check if the final time corresponds to an extremal profile calculated in step 1
             if (t_profile - self.blocks[dof].t_min).abs() < 2.0 * self.eps {
-                traj.profiles[0][dof] = self.blocks[dof].p_min;
+                traj.profiles[0][dof] = self.blocks[dof].p_min.clone();
                 continue;
             } else if let Some(a) = &self.blocks[dof].a {
                 if (t_profile - a.right).abs() < 2.0 * self.eps {
-                    traj.profiles[0][dof] = a.profile;
+                    traj.profiles[0][dof] = a.profile.clone();
                     continue;
                 }
             } else if let Some(b) = &self.blocks[dof].b {
                 if (t_profile - b.right).abs() < 2.0 * self.eps {
-                    traj.profiles[0][dof] = b.profile;
+                    traj.profiles[0][dof] = b.profile.clone();
                     continue;
                 }
             }

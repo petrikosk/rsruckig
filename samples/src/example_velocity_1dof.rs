@@ -3,21 +3,21 @@ use gnuplot::{AxesCommon, Caption, Figure};
 use rsruckig::prelude::*;
 
 fn main() {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(1, 0.01);
-    let mut input = InputParameter::new(1);
-    let mut output: OutputParameter = OutputParameter::new(1);
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
 
     input.control_interface = ControlInterface::Velocity;
 
-    input.current_position = vec![0.0];
-    input.current_velocity = vec![3.0];
-    input.current_acceleration = vec![0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([3.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0]);
 
-    input.target_velocity = vec![0.0];
-    input.target_acceleration = vec![0.0];
+    input.target_velocity = DataArrayOrVec::Stack([0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0]);
 
-    input.max_acceleration = vec![3.0];
-    input.max_jerk = vec![6.0];
+    input.max_acceleration = DataArrayOrVec::Stack([3.0]);
+    input.max_jerk = DataArrayOrVec::Stack([6.0]);
 
     let mut max_calculation_duration = 0.0;
 

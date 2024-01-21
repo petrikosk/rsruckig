@@ -20,6 +20,11 @@ path = "src/example_velocity_1dof.rs"
 name = "example_position_1dof_custom_error_handler"
 path = "src/example_1dof_custom_error.rs"
 
+[[bin]]
+name = "example_position_3_dynamic_dof"
+path = "src/example_position_3_dynamic_dof.rs"
+
+
 [dependencies]
 rsruckig = { path = "../lib" }
 gnuplot = "0.0.39"

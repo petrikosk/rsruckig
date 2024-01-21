@@ -29,10 +29,10 @@ impl RuckigErrorHandler for LogErrorHandler {
 
 fn main() {
     log4rs::init_file("logging_config.yaml", Default::default()).unwrap();
-    let mut otg = Ruckig::<LogErrorHandler>::new(1, 0.01);
+    let mut otg = Ruckig::<1, LogErrorHandler>::new(None, 0.01);
     info!("Ruckig initialised.");
-    let mut input = InputParameter::new(1);
-    let mut output: OutputParameter = OutputParameter::new(1);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
 
     input.current_position[0] = 0.0;
     input.current_velocity[0] = 7.0;

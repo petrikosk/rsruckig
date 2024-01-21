@@ -32,18 +32,18 @@ fn almost_equal_vecs(a: &[f64], b: &[f64], epsilon: f64) -> bool {
 // Single DOF
 fn test_at_time() {
     // Setup
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(1, 0.005);
-    let mut input = InputParameter::new(1);
-    input.current_position = vec![0.0];
-    input.target_position = vec![1.0];
-    input.max_velocity = vec![1.0];
-    input.max_acceleration = vec![1.0];
-    input.max_jerk = vec![1.0];
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.005);
+    let mut input = InputParameter::new(None);
+    input.current_position = DataArrayOrVec::Stack([0.0]);
+    input.target_position = DataArrayOrVec::Stack([1.0]);
+    input.max_velocity = DataArrayOrVec::Stack([1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0]);
 
-    let mut traj = Trajectory::new(1);
+    let mut traj = Trajectory::new(None);
     let _result = otg.calculate(&input, &mut traj);
 
-    let mut output: OutputParameter = OutputParameter::new(1);
+    let mut output = OutputParameter::new(None);
 
     // Call the method you want to test
     let result = otg.update(&input, &mut output);
@@ -52,9 +52,9 @@ fn test_at_time() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 3.1748, abs <= 0.000_1);
 
-    let mut new_position = vec![0.0; 1];
-    let mut new_velocity = vec![0.0; 1];
-    let mut new_acceleration = vec![0.0; 1];
+    let mut new_position = DataArrayOrVec::Stack([0.0; 1]);
+    let mut new_velocity = DataArrayOrVec::Stack([0.0; 1]);
+    let mut new_acceleration = DataArrayOrVec::Stack([0.0; 1]);
     traj.at_time(
         0.0,
         &mut Some(&mut new_position),
@@ -80,23 +80,23 @@ fn test_at_time() {
 #[test]
 fn test_secondary() {
     // Setup
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.005);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
 
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![0.0, 0.3, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.3, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
-    let mut traj = Trajectory::new(3);
+    let mut traj = Trajectory::new(None);
 
     let result = otg.calculate(&input, &mut traj);
     assert_eq!(result.unwrap_or(RuckigResult::Error), RuckigResult::Working);
@@ -107,10 +107,10 @@ fn test_secondary() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
 
-    let mut new_position = vec![0.0; 3];
-    let mut new_velocity = vec![0.0; 3];
-    let mut new_acceleration = vec![0.0; 3];
-    let mut new_jerk = vec![0.0; 3];
+    let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_velocity = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_acceleration = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_jerk = DataArrayOrVec::Stack([0.0; 3]);
 
     output.trajectory.at_time(
         0.0,
@@ -164,7 +164,7 @@ fn test_secondary() {
         &[0.5, -2.6871268303003437, 1.0],
         0.000_1
     ));
-    assert_eq!(new_jerk, vec![0.0, 0.0, -1.0]);
+    assert_eq!(new_jerk, DataArrayOrVec::Stack([0.0, 0.0, -1.0]));
     assert_eq!(new_section, Some(0));
 
     output.trajectory.at_time(
@@ -175,7 +175,7 @@ fn test_secondary() {
         &mut Some(&mut new_jerk),
         &mut new_section,
     );
-    assert_eq!(new_jerk, vec![0.0, 0.0, 0.0]);
+    assert_eq!(new_jerk, DataArrayOrVec::Stack([0.0, 0.0, 0.0]));
     assert_eq!(new_section, Some(1));
 
     let independent_min_durations = output.trajectory.get_independent_min_durations();
@@ -235,17 +235,17 @@ fn test_secondary() {
 
     let time = output.trajectory.get_first_time_at_position(6, 0.0);
     assert_eq!(time, None);
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![2.0, 0.3, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Stack([2.0, 0.3, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -262,7 +262,7 @@ fn test_secondary() {
     }
     assert!(!output.new_calculation);
 
-    input.target_velocity = vec![0.2, -0.3, 0.8];
+    input.target_velocity = DataArrayOrVec::Stack([0.2, -0.3, 0.8]);
     let result = otg.update(&input, &mut output);
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert!(output.new_calculation);
@@ -272,17 +272,17 @@ fn test_secondary() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 12.0, abs <= 0.000_1);
 
-    input.current_position = vec![1300.0, 0.0, 0.02];
-    input.current_velocity = vec![1200.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([1300.0, 0.0, 0.02]);
+    input.current_velocity = DataArrayOrVec::Stack([1200.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1400.0, 0.0, 0.02];
-    input.target_velocity = vec![0.0, 0.0, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([1400.0, 0.0, 0.02]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![800.0, 1.0, 1.0];
-    input.max_acceleration = vec![40000.0, 1.0, 1.0];
-    input.max_jerk = vec![200000.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([800.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([40000.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([200000.0, 1.0, 1.0]);
 
     input.minimum_duration = None;
 
@@ -304,20 +304,20 @@ fn test_secondary() {
 #[test]
 fn test_enabled() {
     // Setup
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.005);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
 
-    input.enabled = vec![true, false, false];
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.1, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, -0.2];
+    input.enabled = DataArrayOrVec::Stack([true, false, false]);
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.1, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, -0.2]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -328,9 +328,9 @@ fn test_enabled() {
         abs <= 0.000_1
     );
 
-    let mut new_position = vec![0.0; 3];
-    let mut new_velocity = vec![0.0; 3];
-    let mut new_acceleration = vec![0.0; 3];
+    let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_velocity = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_acceleration = DataArrayOrVec::Stack([0.0; 3]);
 
     output.trajectory.at_time(
         0.0,
@@ -372,25 +372,25 @@ fn test_enabled() {
     ));
 
     // Make sure that disabled DoFs overwrite prior blocks
-    input.enabled = vec![true, true, true];
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.target_position = vec![100.0, -3000.0, 2000.0];
-    input.target_velocity = vec![1.0, 1.0, 1.0];
+    input.enabled = DataArrayOrVec::Stack([true, true, true]);
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_position = DataArrayOrVec::Stack([100.0, -3000.0, 2000.0]);
+    input.target_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let _result = otg.update(&input, &mut output);
 
-    input.enabled = vec![false, false, true];
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.2, 0.0];
-    input.current_acceleration = vec![0.0, 0.2, 0.0];
+    input.enabled = DataArrayOrVec::Stack([false, false, true]);
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.2, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.2, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![0.0, 0.0, 0.2];
-    input.target_acceleration = vec![0.0, 0.0, -0.1];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.2]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, -0.1]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -405,22 +405,22 @@ fn test_enabled() {
 #[test]
 fn test_phase_synchronization() {
     // Setup
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
-    let mut traj = Trajectory::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.005);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
+    let mut traj = Trajectory::new(None);
 
-    let mut new_position = vec![0.0; 3];
-    let mut new_velocity = vec![0.0; 3];
-    let mut new_acceleration = vec![0.0; 3];
+    let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_velocity = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_acceleration = DataArrayOrVec::Stack([0.0; 3]);
 
-    input.current_position = vec![0.0, -2.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     input.synchronization = Synchronization::Phase;
 
@@ -467,13 +467,13 @@ fn test_phase_synchronization() {
         0.000_1
     ));
 
-    input.current_position = vec![0.0, -2.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
 
-    input.target_position = vec![10.0, -3.0, 2.0];
+    input.target_position = DataArrayOrVec::Stack([10.0, -3.0, 2.0]);
 
-    input.max_velocity = vec![10.0, 2.0, 1.0];
-    input.max_acceleration = vec![10.0, 2.0, 1.0];
-    input.max_jerk = vec![10.0, 2.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([10.0, 2.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([10.0, 2.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([10.0, 2.0, 1.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -505,8 +505,8 @@ fn test_phase_synchronization() {
     ));
 
     // Test equal start and target state
-    input.current_position = vec![1.0, -2.0, 3.0];
-    input.target_position = vec![1.0, -2.0, 3.0];
+    input.current_position = DataArrayOrVec::Stack([1.0, -2.0, 3.0]);
+    input.target_position = DataArrayOrVec::Stack([1.0, -2.0, 3.0]);
 
     let result = otg.update(&input, &mut output);
     output.trajectory.at_time(
@@ -532,17 +532,17 @@ fn test_phase_synchronization() {
         0.000_1
     ));
 
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![0.0, 0.0, 0.0];
-    input.target_velocity = vec![0.2, 0.3, 0.4];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.2, 0.3, 0.4]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.calculate(&input, &mut traj);
     assert_eq!(result.unwrap(), RuckigResult::Working);
@@ -557,13 +557,13 @@ fn test_phase_synchronization() {
         0.000_1
     ));
 
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![0.0, 0.0, 0.01];
-    input.target_velocity = vec![0.2, 0.3, 0.4];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.0, 0.0, 0.01]);
+    input.target_velocity = DataArrayOrVec::Stack([0.2, 0.3, 0.4]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -571,13 +571,13 @@ fn test_phase_synchronization() {
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][2].t);
 
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.current_velocity = vec![0.4, 0.15, 0.2];
-    input.current_acceleration = vec![0.8, 0.3, 0.4];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.4, 0.15, 0.2]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.8, 0.3, 0.4]);
 
-    input.target_position = vec![0.0, 0.0, 0.0];
-    input.target_velocity = vec![0.0, 0.0, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -593,7 +593,7 @@ fn test_phase_synchronization() {
         0.000_1
     ));
 
-    input.max_velocity = vec![1.0, 0.2, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 0.2, 1.0]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -601,17 +601,17 @@ fn test_phase_synchronization() {
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][2].t);
 
-    input.current_position = vec![0.0, 0.02, 1.0];
-    input.current_velocity = vec![-0.2, 0.15, 0.2];
-    input.current_acceleration = vec![-0.4, 0.3, 0.4];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.02, 1.0]);
+    input.current_velocity = DataArrayOrVec::Stack([-0.2, 0.15, 0.2]);
+    input.current_acceleration = DataArrayOrVec::Stack([-0.4, 0.3, 0.4]);
 
-    input.target_position = vec![0.03, 0.0, 0.0];
-    input.target_velocity = vec![-0.02, 0.015, 0.02];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.03, 0.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([-0.02, 0.015, 0.02]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
     input.control_interface = ControlInterface::Velocity;
 
     let result = otg.calculate(&input, &mut traj);
@@ -628,7 +628,7 @@ fn test_phase_synchronization() {
         0.000_1
     ));
 
-    input.max_jerk = vec![1.0, 0.1, 1.0];
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 0.1, 1.0]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -644,7 +644,7 @@ fn test_phase_synchronization() {
         0.000_1
     ));
 
-    input.target_acceleration = vec![0.01, 0.0, 0.0];
+    input.target_acceleration = DataArrayOrVec::Stack([0.01, 0.0, 0.0]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -652,13 +652,13 @@ fn test_phase_synchronization() {
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][2].t);
 
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![0.0, 0.0, 0.0];
-    input.target_velocity = vec![0.0, 0.0, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -668,23 +668,23 @@ fn test_phase_synchronization() {
 #[test]
 fn test_discretion() {
     // Setup
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.01);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
-    let mut traj = Trajectory::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
+    let mut traj = Trajectory::new(None);
 
-    let mut new_position = vec![0.0; 3];
-    let mut new_velocity = vec![0.0; 3];
-    let mut new_acceleration = vec![0.0; 3];
+    let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_velocity = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_acceleration = DataArrayOrVec::Stack([0.0; 3]);
 
-    input.current_position = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![0.2, 0.2, 0.2];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.2, 0.2, 0.2]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![2.0, 2.0, 2.0];
-    input.max_jerk = vec![1.8, 2.4, 2.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([2.0, 2.0, 2.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.8, 2.4, 2.0]);
 
     input.duration_discretization = DurationDiscretization::Discrete;
 
@@ -707,31 +707,30 @@ fn test_discretion() {
 
 #[test]
 fn test_per_dof_setting() {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
-    let mut input = InputParameter::new(3);
-    //let mut output: OutputParameter = OutputParameter::new(3);
-    let mut traj = Trajectory::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.005);
+    let mut input = InputParameter::new(None);
+    let mut traj = Trajectory::new(None);
 
     // Test case 1
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![0.0, 0.3, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.3, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.calculate(&input, &mut traj);
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
-    let mut new_position = vec![0.0; 3];
-    let mut new_velocity = vec![0.0; 3];
-    let mut new_acceleration = vec![0.0; 3];
+    let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_velocity = DataArrayOrVec::Stack([0.0; 3]);
+    let mut new_acceleration = DataArrayOrVec::Stack([0.0; 3]);
 
     traj.at_time(
         2.0,
@@ -768,22 +767,22 @@ fn test_per_dof_setting() {
         0.000_1
     ));
 
-    input.per_dof_control_interface = Some(vec![
+    input.per_dof_control_interface = Some(DataArrayOrVec::Stack([
         ControlInterface::Position,
         ControlInterface::Velocity,
         ControlInterface::Position,
-    ]);
+    ]));
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
-    input.per_dof_synchronization = Some(vec![
+    input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
         Synchronization::Time,
         Synchronization::None,
         Synchronization::Time,
-    ]);
+    ]));
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -807,11 +806,11 @@ fn test_per_dof_setting() {
 
     input.control_interface = ControlInterface::Position;
     input.per_dof_control_interface = None;
-    input.per_dof_synchronization = Some(vec![
+    input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
         Synchronization::None,
         Synchronization::Time,
         Synchronization::Time,
-    ]);
+    ]));
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -868,89 +867,89 @@ fn test_per_dof_setting() {
 
     assert_float_eq!(new_position[2], input.target_position[2], abs <= 0.000_1);
 
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![35.0, 35.0, 35.0];
-    input.target_velocity = vec![125.0, 125.0, 100.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([35.0, 35.0, 35.0]);
+    input.target_velocity = DataArrayOrVec::Stack([125.0, 125.0, 100.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![125.0, 125.0, 100.0];
-    input.max_acceleration = vec![2000.0, 2000.0, 2000.0];
-    input.max_jerk = vec![20000.0, 20000.0, 20000.0];
+    input.max_velocity = DataArrayOrVec::Stack([125.0, 125.0, 100.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([2000.0, 2000.0, 2000.0]);
+    input.max_jerk = DataArrayOrVec::Stack([20000.0, 20000.0, 20000.0]);
 
-    input.per_dof_synchronization = Some(vec![
+    input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
         Synchronization::Time,
         Synchronization::Time,
         Synchronization::None,
-    ]);
+    ]));
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 0.4207106781, abs <= 0.000_1);
 
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.2, 0.0];
-    input.current_acceleration = vec![0.0, 0.2, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.0, 0.2, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.2, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![0.0, 0.0, 0.2];
-    input.target_acceleration = vec![0.0, 0.0, -0.1];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.2]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, -0.1]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
-    input.per_dof_synchronization = Some(vec![
+    input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
         Synchronization::None,
         Synchronization::None,
         Synchronization::Time,
-    ]);
+    ]));
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 3.7885667284, abs <= 0.000_1);
 
-    input.per_dof_synchronization = Some(vec![
+    input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
         Synchronization::None,
         Synchronization::Time,
         Synchronization::None,
-    ]);
+    ]));
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 3.7885667284, abs <= 0.000_1);
 
-    input.enabled = vec![true, false, true];
+    input.enabled = DataArrayOrVec::Stack([true, false, true]);
 
     let result = otg.calculate(&input, &mut traj);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(traj.get_duration(), 3.6578610221, abs <= 0.000_1);
 
-    input.current_position = vec![0.0, 0.0, 0.0];
-    input.current_velocity = vec![0.2, 0.0, -0.1];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.2, 0.0, -0.1]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -0.2, -0.5];
-    input.target_velocity = vec![0.0, 0.0, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -0.2, -0.5]);
+    input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
-    input.per_dof_synchronization = Some(vec![
+    input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
         Synchronization::Phase,
         Synchronization::None,
         Synchronization::Phase,
-    ]);
+    ]));
 
-    input.enabled = vec![true, true, true];
+    input.enabled = DataArrayOrVec::Stack([true, true, true]);
 
     let result = otg.calculate(&input, &mut traj);
 
@@ -966,30 +965,30 @@ fn test_per_dof_setting() {
 
 #[test]
 fn test_dynamic_dofs() {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
+    let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(3), 0.005);
+    let mut input = InputParameter::new(Some(3));
+    let mut output = OutputParameter::new(Some(3));
 
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.0, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Heap(vec![0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Heap(vec![0.0, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Heap(vec![0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 2.0];
-    input.target_velocity = vec![0.0, 0.3, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Heap(vec![1.0, -3.0, 2.0]);
+    input.target_velocity = DataArrayOrVec::Heap(vec![0.0, 0.3, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Heap(vec![0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![1.0, 1.0, 1.0];
-    input.max_jerk = vec![1.0, 1.0, 1.0];
+    input.max_velocity = DataArrayOrVec::Heap(vec![1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Heap(vec![1.0, 1.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Heap(vec![1.0, 1.0, 1.0]);
 
     let result = otg.update(&input, &mut output);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
 
-    let mut new_position = vec![0.0; 3];
-    let mut new_velocity = vec![0.0; 3];
-    let mut new_acceleration = vec![0.0; 3];
+    let mut new_position = DataArrayOrVec::Heap(vec![0.0; 3]);
+    let mut new_velocity = DataArrayOrVec::Heap(vec![0.0; 3]);
+    let mut new_acceleration = DataArrayOrVec::Heap(vec![0.0; 3]);
 
     output.trajectory.at_time(
         0.0,
@@ -1018,38 +1017,38 @@ fn test_dynamic_dofs() {
 
 #[test]
 fn test_zero_limits() {
-    let mut otg = Ruckig::<ThrowErrorHandler>::new(3, 0.005);
-    let mut input = InputParameter::new(3);
-    let mut output: OutputParameter = OutputParameter::new(3);
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.005);
+    let mut input = InputParameter::new(None);
+    let mut output = OutputParameter::new(None);
 
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![0.2, 0.0, 0.0];
-    input.current_acceleration = vec![0.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([0.2, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.target_position = vec![1.0, -3.0, 0.0];
-    input.target_velocity = vec![0.2, 0.0, 0.0];
-    input.target_acceleration = vec![0.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([1.0, -3.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.2, 0.0, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 1.0, 1.0];
-    input.max_acceleration = vec![0.0, 1.0, 0.0];
-    input.max_jerk = vec![0.0, 1.0, 0.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([0.0, 1.0, 0.0]);
+    input.max_jerk = DataArrayOrVec::Stack([0.0, 1.0, 0.0]);
 
     let result = otg.update(&input, &mut output);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 5.0, abs <= 0.000_1);
 
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![-0.2, 0.0, 0.0];
-    input.current_acceleration = vec![1.0, 0.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([-0.2, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([1.0, 0.0, 0.0]);
 
-    input.target_position = vec![0.4, -3.0, 0.0];
-    input.target_velocity = vec![0.8, 0.0, 0.0];
-    input.target_acceleration = vec![1.0, 0.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.4, -3.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.8, 0.0, 0.0]);
+    input.target_acceleration = DataArrayOrVec::Stack([1.0, 0.0, 0.0]);
 
-    input.max_velocity = vec![1.0, 200.0, 0.0];
-    input.max_acceleration = vec![1.0, 200.0, 0.0];
-    input.max_jerk = vec![0.0, 200.0, 0.0];
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 200.0, 0.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 200.0, 0.0]);
+    input.max_jerk = DataArrayOrVec::Stack([0.0, 200.0, 0.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -1065,10 +1064,10 @@ fn test_zero_limits() {
         }
     }
 
-    input.target_position = vec![0.3, -3.0, 0.0];
-    input.max_velocity = vec![1.0, 2.0, 1.0];
-    input.max_acceleration = vec![1.0, 2.0, 0.0];
-    input.max_jerk = vec![0.0, 2.0, 0.0];
+    input.target_position = DataArrayOrVec::Stack([0.3, -3.0, 0.0]);
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 2.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 2.0, 0.0]);
+    input.max_jerk = DataArrayOrVec::Stack([0.0, 2.0, 0.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -1085,15 +1084,15 @@ fn test_zero_limits() {
     }
 
     input.control_interface = ControlInterface::Velocity;
-    input.current_position = vec![0.0, -2.0, 0.0];
-    input.current_velocity = vec![-0.2, 0.0, 0.0];
-    input.current_acceleration = vec![1.0, 0.0, 0.2];
-    input.target_position = vec![0.4, -3.0, 0.0];
-    input.target_velocity = vec![0.9, 0.5, 0.4];
-    input.target_acceleration = vec![1.0, 0.0, 0.2];
-    input.max_velocity = vec![1.0, 2.0, 1.0];
-    input.max_acceleration = vec![1.0, 2.0, 6.0];
-    input.max_jerk = vec![0.0, 2.0, 0.0];
+    input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
+    input.current_velocity = DataArrayOrVec::Stack([-0.2, 0.0, 0.0]);
+    input.current_acceleration = DataArrayOrVec::Stack([1.0, 0.0, 0.2]);
+    input.target_position = DataArrayOrVec::Stack([0.4, -3.0, 0.0]);
+    input.target_velocity = DataArrayOrVec::Stack([0.9, 0.5, 0.4]);
+    input.target_acceleration = DataArrayOrVec::Stack([1.0, 0.0, 0.2]);
+    input.max_velocity = DataArrayOrVec::Stack([1.0, 2.0, 1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([1.0, 2.0, 6.0]);
+    input.max_jerk = DataArrayOrVec::Stack([0.0, 2.0, 0.0]);
 
     let result = otg.update(&input, &mut output);
 
@@ -1109,14 +1108,14 @@ fn test_zero_limits() {
         }
     }
 
-    input.max_jerk = vec![1.0, 2.0, 0.0];
+    input.max_jerk = DataArrayOrVec::Stack([1.0, 2.0, 0.0]);
 
     let result = otg.update(&input, &mut output);
 
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 2.0, abs <= 0.000_1);
 
-    input.max_jerk = vec![0.0, 2.0, 20.0];
+    input.max_jerk = DataArrayOrVec::Stack([0.0, 2.0, 20.0]);
 
     let result = otg.update(&input, &mut output);
 
