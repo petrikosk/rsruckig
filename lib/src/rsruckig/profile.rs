@@ -13,7 +13,7 @@ static A_PRECISION: f64 = 1e-10;
 
 static T_MAX: f64 = 1e12;
 
-#[derive(Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum ReachedLimits {
     Acc0Acc1Vel,
     Vel,
@@ -26,21 +26,21 @@ pub enum ReachedLimits {
     None,
 }
 
-#[derive(Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub enum Direction {
     #[default]
     UP,
     DOWN,
 }
 
-#[derive(Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub enum ControlSigns {
     #[default]
     UDDU,
     UDUD,
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Bound {
     // The extreme position
     pub min: f64,
@@ -51,7 +51,7 @@ pub struct Bound {
 }
 
 /// The state profile for position, velocity, acceleration and jerk for a single DoF
-#[derive(Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Profile {
     pub t: [f64; 7],
     pub t_sum: [f64; 7],
@@ -480,8 +480,8 @@ impl Profile {
         self.af = profile.af;
         self.vf = profile.vf;
         self.pf = profile.pf;
-        self.brake = profile.brake;
-        self.accel = profile.accel;
+        self.brake = profile.brake.clone();
+        self.accel = profile.accel.clone();
     }
 
     #[inline]

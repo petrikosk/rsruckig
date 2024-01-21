@@ -5,7 +5,7 @@ use std::f64;
 use std::fmt;
 use std::option::Option;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct Block {
     pub p_min: Profile,
     pub t_min: f64,
@@ -19,14 +19,14 @@ pub fn remove_profile(
     index: usize,
 ) {
     for i in index..(*valid_profile_counter - 1) {
-        valid_profiles[i] = valid_profiles[i + 1];
+        valid_profiles[i] = valid_profiles[i + 1].clone();
     }
     *valid_profile_counter -= 1;
 }
 
 impl Block {
     pub fn set_min_profile(&mut self, profile: &Profile) {
-        self.p_min = *profile;
+        self.p_min = profile.clone();
         self.t_min = self.p_min.t_sum.last().unwrap()
             + self.p_min.brake.duration
             + self.p_min.accel.duration;
@@ -189,7 +189,7 @@ impl fmt::Display for Block {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Interval {
     pub left: f64,
     pub right: f64,
@@ -222,7 +222,7 @@ impl Interval {
         Self {
             left,
             right,
-            profile: *profile,
+            profile: profile.clone(),
         }
     }
 }

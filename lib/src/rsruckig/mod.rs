@@ -33,4 +33,5 @@ pub mod prelude {
     pub use super::result::RuckigResult;
     pub use super::ruckig::Ruckig;
     pub use super::trajectory::Trajectory;
+    pub use super::util::DataArrayOrVec;
 }

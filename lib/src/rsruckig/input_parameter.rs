@@ -2,9 +2,8 @@ use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::util::{join, DataArrayOrVec};
 use std::fmt;
 use std::ops::Deref;
-use std::vec::Vec;
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum ControlInterface {
     #[default]
     Position,
@@ -12,7 +11,7 @@ pub enum ControlInterface {
     Acceleration,
 }
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum Synchronization {
     #[default]
     Time,
@@ -21,39 +20,39 @@ pub enum Synchronization {
     None,
 }
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum DurationDiscretization {
     #[default]
     Continuous,
     Discrete,
 }
 
-#[derive(Default, Clone)]
-pub struct InputParameter<const DOFs: usize> {
+#[derive(Debug, Default, Clone)]
+pub struct InputParameter<const DOF: usize> {
     pub degrees_of_freedom: usize,
     pub control_interface: ControlInterface,
     pub synchronization: Synchronization,
     pub duration_discretization: DurationDiscretization,
-    pub current_position: DataArrayOrVec<f64, DOFs>,
-    pub current_velocity: DataArrayOrVec<f64, DOFs>,
-    pub current_acceleration: DataArrayOrVec<f64, DOFs>,
-    pub target_position: DataArrayOrVec<f64, DOFs>,
-    pub target_velocity: DataArrayOrVec<f64, DOFs>,
-    pub target_acceleration: DataArrayOrVec<f64, DOFs>,
-    pub max_velocity: DataArrayOrVec<f64, DOFs>,
-    pub max_acceleration: DataArrayOrVec<f64, DOFs>,
-    pub max_jerk: DataArrayOrVec<f64, DOFs>,
-    pub min_velocity: Option<DataArrayOrVec<f64, DOFs>>,
-    pub min_acceleration: Option<DataArrayOrVec<f64, DOFs>>,
-    pub enabled: DataArrayOrVec<bool, DOFs>,
-    pub per_dof_control_interface: Option<Vec<ControlInterface>>,
-    pub per_dof_synchronization: Option<Vec<Synchronization>>,
+    pub current_position: DataArrayOrVec<f64, DOF>,
+    pub current_velocity: DataArrayOrVec<f64, DOF>,
+    pub current_acceleration: DataArrayOrVec<f64, DOF>,
+    pub target_position: DataArrayOrVec<f64, DOF>,
+    pub target_velocity: DataArrayOrVec<f64, DOF>,
+    pub target_acceleration: DataArrayOrVec<f64, DOF>,
+    pub max_velocity: DataArrayOrVec<f64, DOF>,
+    pub max_acceleration: DataArrayOrVec<f64, DOF>,
+    pub max_jerk: DataArrayOrVec<f64, DOF>,
+    pub min_velocity: Option<DataArrayOrVec<f64, DOF>>,
+    pub min_acceleration: Option<DataArrayOrVec<f64, DOF>>,
+    pub enabled: DataArrayOrVec<bool, DOF>,
+    pub per_dof_control_interface: Option<DataArrayOrVec<ControlInterface, DOF>>,
+    pub per_dof_synchronization: Option<DataArrayOrVec<Synchronization, DOF>>,
     pub minimum_duration: Option<f64>,
-    pub per_section_minimum_duration: Option<DataArrayOrVec<f64, DOFs>>,
+    pub per_section_minimum_duration: Option<DataArrayOrVec<f64, DOF>>,
     pub interrupt_calculation_duration: Option<f64>,
 }
 
-impl<const DOFs: usize, T: PartialEq> PartialEq for InputParameter<DOFs> {
+impl<const DOF: usize> PartialEq for InputParameter<DOF> {
     fn eq(&self, other: &Self) -> bool {
         self.current_position == other.current_position
             && self.current_velocity == other.current_velocity
@@ -77,23 +76,23 @@ impl<const DOFs: usize, T: PartialEq> PartialEq for InputParameter<DOFs> {
     }
 }
 
-impl<const DOFs: usize> InputParameter<DOFs> {
+impl<const DOF: usize> InputParameter<DOF> {
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
-            degrees_of_freedom: dofs.unwrap_or(DOFs),
+            degrees_of_freedom: dofs.unwrap_or(DOF),
             control_interface: ControlInterface::Position,
             synchronization: Synchronization::Time,
             duration_discretization: DurationDiscretization::Continuous,
             current_position: DataArrayOrVec::new(dofs, 0.0),
             current_velocity: DataArrayOrVec::new(dofs, 0.0),
-            current_acceleration: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            target_position: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            target_velocity: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            target_acceleration: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            max_velocity: DataArrayOrVec::<f64, DOFs>::new(dofs, 0.0),
-            max_acceleration: DataArrayOrVec::<f64, DOFs>::new(dofs, f64::INFINITY),
-            max_jerk: DataArrayOrVec::<f64, DOFs>::new(dofs, f64::INFINITY),
-            enabled: DataArrayOrVec::<bool, DOFs>::new(dofs, true),
+            current_acceleration: DataArrayOrVec::<f64, DOF>::new(dofs, 0.0),
+            target_position: DataArrayOrVec::<f64, DOF>::new(dofs, 0.0),
+            target_velocity: DataArrayOrVec::<f64, DOF>::new(dofs, 0.0),
+            target_acceleration: DataArrayOrVec::<f64, DOF>::new(dofs, 0.0),
+            max_velocity: DataArrayOrVec::<f64, DOF>::new(dofs, 0.0),
+            max_acceleration: DataArrayOrVec::<f64, DOF>::new(dofs, f64::INFINITY),
+            max_jerk: DataArrayOrVec::<f64, DOF>::new(dofs, f64::INFINITY),
+            enabled: DataArrayOrVec::<bool, DOF>::new(dofs, true),
             min_velocity: None,
             min_acceleration: None,
             per_dof_control_interface: None,
@@ -249,27 +248,27 @@ impl<const DOFs: usize> InputParameter<DOFs> {
                     }
                 }
                 if check_current_state_within_limits {
-                    if a0 > 0.0 && j_max > 0.0 && InputParameter::v_at_a_zero(v0, a0, j_max) > v_max
+                    if a0 > 0.0 && j_max > 0.0 && InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max) > v_max
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, j_max), v_max));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max), v_max));
                     }
                     if a0 < 0.0
                         && j_max > 0.0
-                        && InputParameter::v_at_a_zero(v0, a0, -j_max) < v_min
+                        && InputParameter::<DOF>::v_at_a_zero(v0, a0, -j_max) < v_min
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(v0, a0, -j_max), v_min));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(v0, a0, -j_max), v_min));
                     }
                 }
                 if check_target_state_within_limits {
-                    if af < 0.0 && j_max > 0.0 && InputParameter::v_at_a_zero(vf, af, j_max) > v_max
+                    if af < 0.0 && j_max > 0.0 && InputParameter::<DOF>::v_at_a_zero(vf, af, j_max) > v_max
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, j_max), v_max));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(vf, af, j_max), v_max));
                     }
                     if af > 0.0
                         && j_max > 0.0
-                        && InputParameter::v_at_a_zero(vf, af, -j_max) < v_min
+                        && InputParameter::<DOF>::v_at_a_zero(vf, af, -j_max) < v_min
                     {
-                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::v_at_a_zero(vf, af, -j_max), v_min));
+                        return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(vf, af, -j_max), v_min));
                     }
                 }
             }
@@ -278,7 +277,7 @@ impl<const DOFs: usize> InputParameter<DOFs> {
     }
 }
 
-impl fmt::Display for InputParameter {
+impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "")?;
 
@@ -300,53 +299,53 @@ impl fmt::Display for InputParameter {
         writeln!(
             f,
             "\ninp.current_position = [{}]",
-            join(self.current_position.deref(), true)
+            join::<DOF>(self.current_position.deref(), true)
         )?;
         writeln!(
             f,
             "inp.current_velocity = [{}]",
-            join(self.current_velocity.deref(), true)
+            join::<DOF>(self.current_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "inp.current_acceleration = [{}]",
-            join(self.current_acceleration.deref(), true)
+            join::<DOF>(self.current_acceleration.deref(), true)
         )?;
         writeln!(
             f,
             "inp.target_position = [{}]",
-            join(self.target_position.deref(), true)
+            join::<DOF>(self.target_position.deref(), true)
         )?;
         writeln!(
             f,
             "inp.target_velocity = [{}]",
-            join(self.target_velocity.deref(), true)
+            join::<DOF>(self.target_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "inp.target_acceleration = [{}]",
-            join(self.target_acceleration.deref(), true)
+            join::<DOF>(self.target_acceleration.deref(), true)
         )?;
         writeln!(
             f,
             "inp.max_velocity = [{}]",
-            join(self.max_velocity.deref(), true)
+            join::<DOF>(self.max_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "inp.max_acceleration = [{}]",
-            join(self.max_acceleration.deref(), true)
+            join::<DOF>(self.max_acceleration.deref(), true)
         )?;
-        writeln!(f, "inp.max_jerk = [{}]", join(self.max_jerk.deref(), true))?;
+        writeln!(f, "inp.max_jerk = [{}]", join::<DOF>(self.max_jerk.deref(), true))?;
 
         if let Some(min_vel) = &self.min_velocity {
-            writeln!(f, "inp.min_velocity = [{}]", join(min_vel.deref(), true))?;
+            writeln!(f, "inp.min_velocity = [{}]", join::<DOF>(min_vel.deref(), true))?;
         }
         if let Some(min_acc) = &self.min_acceleration {
             writeln!(
                 f,
                 "inp.min_acceleration = [{}]",
-                join(min_acc.deref(), true)
+                join::<DOF>(min_acc.deref(), true)
             )?;
         }
 

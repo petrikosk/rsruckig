@@ -3,16 +3,16 @@ use std::ops::Deref;
 
 use crate::input_parameter::InputParameter;
 use crate::trajectory::Trajectory;
-use crate::util::join;
+use crate::util::{DataArrayOrVec, join};
 
 #[derive(Clone, Default)]
-pub struct OutputParameter {
+pub struct OutputParameter<const DOF: usize> {
     pub degrees_of_freedom: usize,
-    pub trajectory: Trajectory,
-    pub new_position: Vec<f64>,
-    pub new_velocity: Vec<f64>,
-    pub new_acceleration: Vec<f64>,
-    pub new_jerk: Vec<f64>,
+    pub trajectory: Trajectory<DOF>,
+    pub new_position: DataArrayOrVec<f64, DOF>,
+    pub new_velocity: DataArrayOrVec<f64, DOF>,
+    pub new_acceleration: DataArrayOrVec<f64, DOF>,
+    pub new_jerk: DataArrayOrVec<f64, DOF>,
     pub time: f64,
     pub new_section: usize,
     pub did_section_change: bool,
@@ -21,15 +21,15 @@ pub struct OutputParameter {
     pub calculation_duration: f64,
 }
 
-impl OutputParameter {
-    pub fn new(dofs: usize) -> Self {
+impl<const DOF: usize> OutputParameter<DOF> {
+    pub fn new(dofs: Option<usize>) -> Self {
         Self {
-            degrees_of_freedom: dofs,
+            degrees_of_freedom: dofs.unwrap_or(DOF),
             trajectory: Trajectory::new(dofs),
-            new_position: vec![0.0; dofs],
-            new_velocity: vec![0.0; dofs],
-            new_acceleration: vec![0.0; dofs],
-            new_jerk: vec![0.0; dofs],
+            new_position: DataArrayOrVec::new(dofs, 0.0),
+            new_velocity: DataArrayOrVec::new(dofs, 0.0),
+            new_acceleration: DataArrayOrVec::new(dofs, 0.0),
+            new_jerk: DataArrayOrVec::new(dofs, 0.0),
             time: 0.0,
             new_section: 0,
             did_section_change: false,
@@ -38,31 +38,31 @@ impl OutputParameter {
             calculation_duration: 0.0,
         }
     }
-    pub fn pass_to_input(&self, input: &mut InputParameter) {
+    pub fn pass_to_input(&self, input: &mut InputParameter<DOF>) {
         input.current_position = self.new_position.clone();
         input.current_velocity = self.new_velocity.clone();
         input.current_acceleration = self.new_acceleration.clone();
     }
 }
 
-impl fmt::Display for OutputParameter {
+impl<const DOF: usize> fmt::Display for OutputParameter<DOF> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
             "\nout.new_position = [{}]",
-            join(self.new_position.deref(), true)
+            join::<DOF>(self.new_position.deref(), true)
         )?;
         writeln!(
             f,
             "out.new_velocity = [{}]",
-            join(self.new_velocity.deref(), true)
+            join::<DOF>(self.new_velocity.deref(), true)
         )?;
         writeln!(
             f,
             "out.new_acceleration = [{}]",
-            join(self.new_acceleration.deref(), true)
+            join::<DOF>(self.new_acceleration.deref(), true)
         )?;
-        writeln!(f, "out.new_jerk = [{}]", join(self.new_jerk.deref(), true))?;
+        writeln!(f, "out.new_jerk = [{}]", join::<DOF>(self.new_jerk.deref(), true))?;
         writeln!(f, "out.time = [{}]", self.time)?;
         writeln!(
             f,

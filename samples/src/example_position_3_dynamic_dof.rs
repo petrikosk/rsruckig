@@ -3,25 +3,25 @@ use gnuplot::{AxesCommon, Caption, Figure};
 use rsruckig::prelude::*;
 
 fn main() {
-    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.01);
-    let mut input = InputParameter::new(None);
-    let mut output = OutputParameter::new(None);
+    let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(3), 0.01);
+    let mut input = InputParameter::new(Some(3));
+    let mut output = OutputParameter::new(Some(3));
 
-    input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.5]);
-    input.current_velocity = DataArrayOrVec::Stack([0.0, -2.2, -0.5]);
-    input.current_acceleration = DataArrayOrVec::Stack([0.0, 2.5, -0.5]);
+    input.current_position = DataArrayOrVec::Heap(vec![0.0, 0.0, 0.5]);
+    input.current_velocity = DataArrayOrVec::Heap(vec![0.0, -2.2, -0.5]);
+    input.current_acceleration = DataArrayOrVec::Heap(vec![0.0, 2.5, -0.5]);
 
-    input.target_position = DataArrayOrVec::Stack([5.0, -2.0, -3.5]);
-    input.target_velocity = DataArrayOrVec::Stack([0.0, -0.5, -2.0]);
-    input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.5]);
+    input.target_position = DataArrayOrVec::Heap(vec![5.0, -2.0, -3.5]);
+    input.target_velocity = DataArrayOrVec::Heap(vec![0.0, -0.5, -2.0]);
+    input.target_acceleration = DataArrayOrVec::Heap(vec![0.0, 0.0, 0.5]);
 
-    input.max_velocity = DataArrayOrVec::Stack([3.0, 1.0, 3.0]);
-    input.max_acceleration = DataArrayOrVec::Stack([3.0, 2.0, 1.0]);
-    input.max_jerk = DataArrayOrVec::Stack([4.0, 3.0, 2.0]);
+    input.max_velocity = DataArrayOrVec::Heap(vec![3.0, 1.0, 3.0]);
+    input.max_acceleration = DataArrayOrVec::Heap(vec![3.0, 2.0, 1.0]);
+    input.max_jerk = DataArrayOrVec::Heap(vec![4.0, 3.0, 2.0]);
 
     // Set different constraints for negative direction
-    input.min_velocity = Some(DataArrayOrVec::Stack([-2.0, -0.5, -3.0]));
-    input.min_acceleration = Some(DataArrayOrVec::Stack([-2.0, -2.0, -2.0]));
+    input.min_velocity = Some(DataArrayOrVec::Heap(vec![-2.0, -0.5, -3.0]));
+    input.min_acceleration = Some(DataArrayOrVec::Heap(vec![-2.0, -2.0, -2.0]));
 
     let mut max_calculation_duration = 0.0;
 

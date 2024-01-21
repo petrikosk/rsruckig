@@ -40,13 +40,24 @@ Let's get started!
 
 Ruckig provides three main interface classes: the *Ruckig*, the *InputParameter*, and the *OutputParameter* class.
 
-First, you'll need to create a Ruckig instance with the ```RuckigErrorHandler``` as a template parameter, and the number of DOFs and the control cycle (
+First, you'll need to create a Ruckig instance with the ```DOF``` and ```RuckigErrorHandler``` as a template parameter,
+and the number of DOF as an option and the control cycle (
 e.g. in seconds) in the constructor.
+
+You can opt to use template parameter to specify the number of DOF and use stack allocation, or use the constructor to
+specify the number of DOF as ```Option<usize>```.
+If you use dynamic number of DOF, the template DOF parameter must be set to 0 to allocate dofs dynamically.
+Any number greater than 0 as a template parameter, will result in omitting the dynamic DOF parameter.
+In case of dynamic DOF allocation, a good practice is to set constructor DOF parameter to None.
 
 ```.rs
 use rsruckig::prelude::*;
 
-let mut ruckig = Ruckig::<ThrowErrorHandler>::new(6, 0.01); // Number DoFs; control cycle in [s]
+// stack allocation using template parameter
+let mut ruckig = Ruckig::<6, ThrowErrorHandler>::new(None, 0.01); // Number DoFs; control cycle in [s]
+
+// dynamic allocation
+let mut ruckig = Ruckig::<0, ThrowErrorHandler>::new(Some(6), 0.01); // Number DoFs; control cycle in [s]
 ```
 Implemented error handlers are:
 - ```ThrowErrorHandler``` - throws an error with a detailed reason if an input is not valid.
@@ -66,18 +77,33 @@ pub trait RuckigErrorHandler {
 The input type has 3 blocks of data: the *current* state, the *target* state and the corresponding kinematic *limits*.
 
 ```.rs
-let mut input = InputParameter::new(6); // Number DoFs
-input.current_position = vec![0.2, ...];
-input.current_velocity = vec![0.1, ...];
-input.current_acceleration = vec![0.1, ...];
-input.target_position = vec![0.5, ...];
-input.target_velocity = vec![-0.1, ...];
-input.target_acceleration = vec![0.2, ...];
-input.max_velocity = vec![0.4, ...];
-input.max_acceleration = vec![1.0, ...];
-input.max_jerk = vec![4.0, ...];
+// Stack DOF allocation
+let mut input = InputParameter::new(); // Number DoFs
+input.current_position = DataArrayOrVec::Stack([0.2, ...]);
+input.current_velocity = DataArrayOrVec::Stack([0.1, ...]);
+input.current_acceleration = DataArrayOrVec::Stack([0.1, ...]);
+input.target_position = DataArrayOrVec::Stack([0.5, ...]);
+input.target_velocity = DataArrayOrVec::Stack([-0.1, ...]);
+input.target_acceleration = DataArrayOrVec::Stack([0.2, ...]);
+input.max_velocity = DataArrayOrVec::Stack([0.4, ...]);
+input.max_acceleration = DataArrayOrVec::Stack([1.0, ...]);
+input.max_jerk = DataArrayOrVec::Stack([4.0, ...]);
 
-let mut output: OutputParameter = OutputParameter::new(6); // Number DoFs
+let mut output: OutputParameter = OutputParameter::new(None);
+
+// Dynamic DOF allocation
+let mut input = InputParameter::new(Some(6)); // Number DoFs
+input.current_position = DataArrayOrVec::Heap(vec![0.2, ...]);
+input.current_velocity = DataArrayOrVec::Heap(vec![0.1, ...]);
+input.current_acceleration = DataArrayOrVec::Heap(vec![0.1, ...]);
+input.target_position = DataArrayOrVec::Heap(vec![0.5, ...]);
+input.target_velocity = DataArrayOrVec::Heap(vec![-0.1, ...]);
+input.target_acceleration = DataArrayOrVec::Heap(vec![0.2, ...]);
+input.max_velocity = DataArrayOrVec::Heap(vec![0.4, ...]);
+input.max_acceleration = DataArrayOrVec::Heap(vec![1.0, ...]);
+input.max_jerk = DataArrayOrVec::Heap(vec![4.0, ...]);
+
+let mut output: OutputParameter = OutputParameter::new(Some(6)); // Number DoFs
 ```
 
 If you only want to have a acceleration-constrained trajectory, you can also omit the `max_jerk` as well as
@@ -100,26 +126,57 @@ state of the input parameter. If (in the next step) the current state is not the
 Ruckig will calculate a new trajectory based on the novel input. When the trajectory has reached the target state,
 the `update` function will return `Result::Finished`.
 
+### DataArrayOrVec
+
+The `DataArrayOrVec` type is a wrapper around a fixed-size array or a vector. It is mainly used to store the kinematic state.
+User can choose between stack and heap allocation. The stack allocation is faster, but the number of DOF must be known at
+compile time. The heap allocation is slower, but the number of DOF can be set at runtime.
+
+```.rs
+pub enum DataArrayOrVec<T, const N: usize>
+where T: std::fmt::Debug {
+Stack([T; N]),
+Heap(Vec<T>),
+}    
+```
+
+Example of usage:    
+
+```.rs
+let mut data = DataArrayOrVec::Stack([0.2, 0.3, 0.4]);
+let mut dynamic_data = DataArrayOrVec::Heap(vec![0.2, 0.3, 0.4]);
+
+data[0] = 0.5;
+data[1] = 0.6;
+data[2] = 0.7;
+
+dynamic_data[0] = 0.5;
+dynamic_data[1] = 0.6;
+dynamic_data[2] = 0.7;
+```
+
+```.rs
+
 ### Input Parameter
 
 To go into more detail, the *InputParameter* type has following members:
 
 ```.rs
 
-current_position: Vec<f64>;
-current_velocity: Vec<f64>; // Initialized to zero
-current_acceleration: Vec<f64>; // Initialized to zero
+current_position: DataArrayOrVec<f64, DOF>;
+current_velocity: DataArrayOrVec<f64, DOF>; // Initialized to zero
+current_acceleration: DataArrayOrVec<f64, DOF>; // Initialized to zero
 
-target_position: Vec<f64>;
-target_velocity: Vec<f64>; // Initialized to zero
-target_acceleration: Vec<f64>; // Initialized to zero
+target_position: DataArrayOrVec<f64, DOF>;
+target_velocity: VDataArrayOrVec<f64, DOF>; // Initialized to zero
+target_acceleration: DataArrayOrVec<f64, DOF>; // Initialized to zero
 
-max_velocity: Vec<f64>;
-max_acceleration: Vec<f64>;
-max_jerk: Vec<f64>; // Initialized to infinity
+max_velocity: DataArrayOrVec<f64, DOF>;
+max_acceleration: DataArrayOrVec<f64, DOF>;
+max_jerk: DataArrayOrVec<f64, DOF>; // Initialized to infinity
 
-min_velocity: Option<Vec<f64>>; // If not given, the negative maximum velocity will be used.
-min_acceleration: Option<Vec<f64>>; // If not given, the negative maximum acceleration will be used.
+min_velocity: Option<DataArrayOrVec<f64, DOF>>; // If not given, the negative maximum velocity will be used.
+min_acceleration: Option<DataArrayOrVec<f64, DOF>>; // If not given, the negative maximum acceleration will be used.
 
 enabled: Vec<bool>; // Initialized to true
 minimum_duration: Option<f64>;
@@ -200,9 +257,9 @@ during calculation. The result type can be compared as a standard integer.
 The output class includes the new kinematic state and the overall trajectory.
 
 ```.rs
-new_position: Vec<f64>;
-new_velocity: Vec<f64>;
-new_acceleration: Vec<f64>;
+new_position: DataArrayOrVec<f64, DOF>;
+new_velocity: DataArrayOrVec<f64, DOF>;
+new_acceleration: DataArrayOrVec<f64, DOF>;
 
 trajectory: Trajectory; // The current trajectory
 time: f64; // The current, auto-incremented time. Reset to 0 at a new calculation.
@@ -219,15 +276,15 @@ Moreover, the **trajectory** struct has a range of useful parameters and methods
 
 ```.rs
 duration: f64; // Duration of the trajectory
-independent_min_durations: Vec<f64>; // Time-optimal profile for each independent DoF
+independent_min_durations: DataArrayOrVec<f64, DOF>; // Time-optimal profile for each independent DoF
 
 <...> pub fn at_time(
         &self,
         time: f64,
-        new_position: &mut Option<&mut Vec<f64>>,
-        new_velocity: &mut Option<&mut Vec<f64>>,
-        new_acceleration: &mut Option<&mut Vec<f64>>,
-        new_jerk: &mut Option<&mut Vec<f64>>,
+        new_position: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
+        new_velocity: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
+        new_acceleration: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
+        new_jerk: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
         new_section: &mut Option<usize>,
     ); // Get the kinematic state of the trajectory at a given time
 <...> get_position_extrema(); // Returns information about the position extrema and their times

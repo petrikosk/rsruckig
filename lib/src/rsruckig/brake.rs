@@ -13,7 +13,7 @@ fn v_at_a_zero(v0: f64, a0: f64, j: f64) -> f64 {
     v0 + (a0 * a0) / (2.0 * j)
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct BrakeProfile {
     pub duration: f64,
     pub t: [f64; 2],

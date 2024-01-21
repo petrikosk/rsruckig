@@ -20,7 +20,7 @@ impl VelocitySecondOrderStep1 {
         }
     }
     pub fn get_profile(&mut self, input: &Profile, block: &mut Block) -> bool {
-        let mut p = block.p_min;
+        let p = &mut block.p_min;
         p.set_boundary_from_profile(input);
 
         let af = if self.vd > 0.0 {
