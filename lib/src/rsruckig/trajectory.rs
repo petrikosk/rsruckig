@@ -16,11 +16,11 @@ pub struct Trajectory<const DOF: usize> {
 impl<const DOF: usize> Default for Trajectory<DOF> {
     fn default() -> Self {
         Self {
-            profiles: Default::default(),
+            profiles: vec![DataArrayOrVec::new(Some(1), Profile::default())],
             duration: Default::default(),
-            cumulative_times: DataArrayOrVec::default(),
-            independent_min_durations: DataArrayOrVec::default(),
-            position_extrema: DataArrayOrVec::default(),
+            cumulative_times: DataArrayOrVec::new(Some(1), 0.0),
+            independent_min_durations: DataArrayOrVec::new(Some(1), 0.0),
+            position_extrema: DataArrayOrVec::new(Some(1), Bound::default()),
             degrees_of_freedom: 1,
         }
     }
@@ -29,14 +29,16 @@ impl<const DOF: usize> Default for Trajectory<DOF> {
 impl<const DOF: usize> Trajectory<DOF> {
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
-            profiles: vec![DataArrayOrVec::<Profile, DOF>::new(dofs, Profile::default())],
+            profiles: vec![DataArrayOrVec::<Profile, DOF>::new(
+                dofs,
+                Profile::default(),
+            )],
             duration: 0.0,
             cumulative_times: DataArrayOrVec::new(dofs, 0.0),
             independent_min_durations: DataArrayOrVec::new(dofs, 0.0),
             position_extrema: DataArrayOrVec::new(dofs, Bound::default()),
             degrees_of_freedom: dofs.unwrap_or(DOF),
         }
-
     }
     pub fn state_to_integrate_from<F>(
         &self,

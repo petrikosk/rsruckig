@@ -9,15 +9,15 @@ fn main() {
 
     input.control_interface = ControlInterface::Velocity;
 
-    input.current_position = DataArrayOrVec::Stack([0.0]);
-    input.current_velocity = DataArrayOrVec::Stack([3.0]);
-    input.current_acceleration = DataArrayOrVec::Stack([0.0]);
+    input.current_position = daov_stack![0.0];
+    input.current_velocity = daov_stack![3.0];
+    input.current_acceleration = daov_stack![0.0];
 
-    input.target_velocity = DataArrayOrVec::Stack([0.0]);
-    input.target_acceleration = DataArrayOrVec::Stack([0.0]);
+    input.target_velocity = daov_stack![0.0];
+    input.target_acceleration = daov_stack![0.0];
 
-    input.max_acceleration = DataArrayOrVec::Stack([3.0]);
-    input.max_jerk = DataArrayOrVec::Stack([6.0]);
+    input.max_acceleration = daov_stack![3.0];
+    input.max_jerk = daov_stack![6.0];
 
     let mut max_calculation_duration = 0.0;
 

@@ -78,30 +78,30 @@ The input type has 3 blocks of data: the *current* state, the *target* state and
 
 ```.rs
 // Stack DOF allocation
-let mut input = InputParameter::new(); // Number DoFs
-input.current_position = DataArrayOrVec::Stack([0.2, ...]);
-input.current_velocity = DataArrayOrVec::Stack([0.1, ...]);
-input.current_acceleration = DataArrayOrVec::Stack([0.1, ...]);
-input.target_position = DataArrayOrVec::Stack([0.5, ...]);
-input.target_velocity = DataArrayOrVec::Stack([-0.1, ...]);
-input.target_acceleration = DataArrayOrVec::Stack([0.2, ...]);
-input.max_velocity = DataArrayOrVec::Stack([0.4, ...]);
-input.max_acceleration = DataArrayOrVec::Stack([1.0, ...]);
-input.max_jerk = DataArrayOrVec::Stack([4.0, ...]);
+let mut input = InputParameter::new(None); // Number DoFs
+input.current_position = daov_stack![[0.2, ...];
+input.current_velocity = daov_stack![0.1, ...];
+input.current_acceleration = daov_stack![0.1, ...];
+input.target_position = daov_stack![0.5, ...];
+input.target_velocity = daov_stack![-0.1, ...];
+input.target_acceleration = daov_stack![0.2, ...];
+input.max_velocity = daov_stack![0.4, ...];
+input.max_acceleration = daov_stack![1.0, ...];
+input.max_jerk = daov_stack![4.0, ...];
 
 let mut output: OutputParameter = OutputParameter::new(None);
 
 // Dynamic DOF allocation
 let mut input = InputParameter::new(Some(6)); // Number DoFs
-input.current_position = DataArrayOrVec::Heap(vec![0.2, ...]);
-input.current_velocity = DataArrayOrVec::Heap(vec![0.1, ...]);
-input.current_acceleration = DataArrayOrVec::Heap(vec![0.1, ...]);
-input.target_position = DataArrayOrVec::Heap(vec![0.5, ...]);
-input.target_velocity = DataArrayOrVec::Heap(vec![-0.1, ...]);
-input.target_acceleration = DataArrayOrVec::Heap(vec![0.2, ...]);
-input.max_velocity = DataArrayOrVec::Heap(vec![0.4, ...]);
-input.max_acceleration = DataArrayOrVec::Heap(vec![1.0, ...]);
-input.max_jerk = DataArrayOrVec::Heap(vec![4.0, ...]);
+input.current_position = daov_heap![0.2, ...];
+input.current_velocity = daov_heap![0.1, ...];
+input.current_acceleration = daov_heap![0.1, ...];
+input.target_position = daov_heap![0.5, ...];
+input.target_velocity = daov_heap![-0.1, ...];
+input.target_acceleration = daov_heap![0.2, ...];
+input.max_velocity = daov_heap![0.4, ...];
+input.max_acceleration = daov_heap![1.0, ...];
+input.max_jerk = daov_heap![4.0, ...];
 
 let mut output: OutputParameter = OutputParameter::new(Some(6)); // Number DoFs
 ```
@@ -140,11 +140,18 @@ Heap(Vec<T>),
 }    
 ```
 
+`DataArrayOrVec` has two associated macros to stramline the instantation process with these shorthand forms:
+
+- `daov_stack!`
+- `daov_heap!`
+
 Example of usage:    
 
 ```.rs
-let mut data = DataArrayOrVec::Stack([0.2, 0.3, 0.4]);
-let mut dynamic_data = DataArrayOrVec::Heap(vec![0.2, 0.3, 0.4]);
+// For stack allocation, using template parameter and array under the hood
+let mut data = daov_stack![0.2, 0.3, 0.4];
+// For heap allocation, using Vec under the hood
+let mut dynamic_data = daov_heap![0.2, 0.3, 0.4];
 
 data[0] = 0.5;
 data[1] = 0.6;
@@ -156,7 +163,6 @@ dynamic_data[2] = 0.7;
 ```
 
 ```.rs
-
 ### Input Parameter
 
 To go into more detail, the *InputParameter* type has following members:
@@ -205,9 +211,6 @@ On top of the current state, target state, and constraints, Ruckig allows for a 
   results in straight-line motions.
 - The trajectory duration might be constrained to a multiple of the control cycle. This way, the *exact* state can be
   reached at a control loop execution.
-
-We refer to the [API documentation](https://docs.ruckig.com/namespaceruckig.html) of the enumerations within
-the `ruckig` namespace for all available options.
 
 ### Input Validation
 

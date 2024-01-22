@@ -28,12 +28,14 @@ pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
 // A utility enum to store either an array or a vector
 #[derive(Debug)]
 pub enum DataArrayOrVec<T, const N: usize>
-    where T: std::fmt::Debug {
+where
+    T: std::fmt::Debug,
+{
     Stack([T; N]),
     Heap(Vec<T>),
 }
 
-impl <T: Default + Clone + std::fmt::Debug, const N: usize> DataArrayOrVec<T, N> {
+impl<T: Default + Clone + std::fmt::Debug, const N: usize> DataArrayOrVec<T, N> {
     pub fn new(dofs: Option<usize>, initial: T) -> Self {
         let size = dofs.unwrap_or(1);
         if N > 0 {
@@ -93,7 +95,9 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> Index<usize> for Data
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> IndexMut<usize> for DataArrayOrVec<T, N> {
+impl<T: Clone + Default + std::fmt::Debug, const N: usize> IndexMut<usize>
+    for DataArrayOrVec<T, N>
+{
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
             DataArrayOrVec::Heap(v) => &mut v[index],
@@ -131,40 +135,39 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArra
     }
 }
 
-// TODO: Needs further investigation before can be used
 #[macro_export]
-macro_rules! data_array_or_vec {
+macro_rules! daov_stack {
     ($($x:expr),+ $(,)?) => {
         {
             let temp: [_; $crate::count_exprs!($($x),*)] = [$($x),*];
-            if temp.len() == N {
-                $crate::DataArrayOrVec::Stack(temp)
-            } else {
-                $crate::DataArrayOrVec::Heap(temp.into())
-            }
+            $crate::util::DataArrayOrVec::Stack(temp)
         }
     };
     ($x:expr; $n:expr) => {
         {
-            if $n == N {
-                $crate::DataArrayOrVec::Stack([$x; $n])
-            } else {
-                $crate::DataArrayOrVec::Heap(vec![$x; $n])
-            }
+            $crate::util::DataArrayOrVec::Stack([$x; $n])
         }
     };
 }
 
-// Secondary macros for calculating array sizes and generating array expressions.
+#[macro_export]
+macro_rules! daov_heap {
+    ($($x:expr),+ $(,)?) => {
+        {
+            let temp: [_; $crate::count_exprs!($($x),*)] = [$($x),*];
+            $crate::util::DataArrayOrVec::Heap(temp.into())
+        }
+    };
+    ($x:expr; $n:expr) => {
+        {
+            $crate::util::DataArrayOrVec::Heap(vec![$x; $n])
+        }
+    };
+}
+
+// Secondary macro for calculating array size.
 #[macro_export]
 macro_rules! count_exprs {
     ($x:expr) => (1usize);
     ($x:expr, $($xs:expr),* $(,)?) => (1usize + $crate::count_exprs!($($xs),*));
-}
-
-#[macro_export]
-macro_rules! make_stack {
-    ($($x:expr),* $(,)?) => {
-        DataArrayOrVec::Stack([$($x),*])
-    };
 }

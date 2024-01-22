@@ -23,6 +23,8 @@ pub mod velocity_second_step2;
 pub mod velocity_third_step1;
 pub mod velocity_third_step2;
 pub mod prelude {
+    pub use super::daov_heap;
+    pub use super::daov_stack;
     pub use super::error::RuckigError;
     pub use super::error::{IgnoreErrorHandler, ThrowErrorHandler};
     pub use super::input_parameter::{
