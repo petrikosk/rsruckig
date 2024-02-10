@@ -3,7 +3,7 @@ use crate::block::{Block, Interval};
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 use crate::roots;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct PositionThirdOrderStep1 {
     v0: f64,
     a0: f64,
@@ -108,21 +108,21 @@ impl PositionThirdOrderStep1 {
         profile.t[2] = a_max / j_max;
         profile.t[3] = (3.0 * (self.a0_p4 * a_min - self.af_p4 * a_max)
             + 8.0
-            * a_max
-            * a_min
-            * (self.af_p3 - self.a0_p3
-            + 3.0 * j_max * (self.a0 * self.v0 - self.af * self.vf))
+                * a_max
+                * a_min
+                * (self.af_p3 - self.a0_p3
+                    + 3.0 * j_max * (self.a0 * self.v0 - self.af * self.vf))
             + 6.0 * self.a0_a0 * a_min * (a_max * a_max - 2.0 * j_max * self.v0)
             - 6.0 * self.af_af * a_max * (a_min * a_min - 2.0 * j_max * self.vf)
             - 12.0
-            * j_max
-            * (a_max
-            * a_min
-            * (a_max * (self.v0 + v_max)
-            - a_min * (self.vf + v_max)
-            - 2.0 * j_max * self.pd)
-            + (a_min - a_max) * j_max * v_max * v_max
-            + j_max * (a_max * self.vf_vf - a_min * self.v0_v0)))
+                * j_max
+                * (a_max
+                    * a_min
+                    * (a_max * (self.v0 + v_max)
+                        - a_min * (self.vf + v_max)
+                        - 2.0 * j_max * self.pd)
+                    + (a_min - a_max) * j_max * v_max * v_max
+                    + j_max * (a_max * self.vf_vf - a_min * self.v0_v0)))
             / (24.0 * a_max * a_min * self.j_max_j_max * v_max);
         profile.t[4] = -a_min / j_max;
         profile.t[5] =
@@ -154,11 +154,11 @@ impl PositionThirdOrderStep1 {
             - 24.0 * a_min * j_max * (self.a0 * self.v0 - self.af * self.vf)
             + 6.0 * self.af_af * (a_min * a_min - 2.0 * j_max * self.vf)
             - 12.0
-            * j_max
-            * (2.0 * a_min * j_max * self.pd
-            + a_min * a_min * (self.vf + v_max)
-            + j_max * (v_max * v_max - self.vf_vf)
-            + a_min * t_acc0 * (self.a0_a0 - 2.0 * j_max * (self.v0 + v_max))))
+                * j_max
+                * (2.0 * a_min * j_max * self.pd
+                    + a_min * a_min * (self.vf + v_max)
+                    + j_max * (v_max * v_max - self.vf_vf)
+                    + a_min * t_acc0 * (self.a0_a0 - 2.0 * j_max * (self.v0 + v_max))))
             / (24.0 * a_min * self.j_max_j_max * v_max);
 
         if profile.check_with_timing(
@@ -187,11 +187,11 @@ impl PositionThirdOrderStep1 {
             + 24.0 * a_max * j_max * (self.a0 * self.v0 - self.af * self.vf)
             + 6.0 * self.a0_a0 * (a_max * a_max - 2.0 * j_max * self.v0)
             - 12.0
-            * j_max
-            * (-2.0 * a_max * j_max * self.pd
-            + a_max * a_max * (self.v0 + v_max)
-            + j_max * (v_max * v_max - self.v0_v0)
-            + a_max * t_acc1 * (-self.af_af + 2.0 * (self.vf + v_max) * j_max)))
+                * j_max
+                * (-2.0 * a_max * j_max * self.pd
+                    + a_max * a_max * (self.v0 + v_max)
+                    + j_max * (v_max * v_max - self.v0_v0)
+                    + a_max * t_acc1 * (-self.af_af + 2.0 * (self.vf + v_max) * j_max)))
             / (24.0 * a_max * self.j_max_j_max * v_max);
         profile.t[4] = t_acc1;
         profile.t[5] = 0.0;
@@ -218,8 +218,8 @@ impl PositionThirdOrderStep1 {
         profile.t[2] = t_acc0;
         profile.t[3] = (self.af_p3 - self.a0_p3) / (3.0 * self.j_max_j_max * v_max)
             + (self.a0 * self.v0 - self.af * self.vf
-            + (self.af_af * t_acc1 + self.a0_a0 * t_acc0) / 2.0)
-            / (j_max * v_max)
+                + (self.af_af * t_acc1 + self.a0_a0 * t_acc0) / 2.0)
+                / (j_max * v_max)
             - (self.v0 / v_max + 1.0) * t_acc0
             - (self.vf / v_max + 1.0) * t_acc1
             + self.pd / v_max;
@@ -246,21 +246,21 @@ impl PositionThirdOrderStep1 {
     ) {
         let mut h1 = (3. * (self.af_p4 * a_max - self.a0_p4 * a_min)
             + a_max
-            * a_min
-            * (8. * (self.a0_p3 - self.af_p3)
-            + 3. * a_max * a_min * (a_max - a_min)
-            + 6. * a_min * self.af_af
-            - 6. * a_max * self.a0_a0)
+                * a_min
+                * (8. * (self.a0_p3 - self.af_p3)
+                    + 3. * a_max * a_min * (a_max - a_min)
+                    + 6. * a_min * self.af_af
+                    - 6. * a_max * self.a0_a0)
             + 12.
-            * j_max
-            * (a_max
-            * a_min
-            * ((a_max - 2. * self.a0) * self.v0 - (a_min - 2. * self.af) * self.vf)
-            + a_min * self.a0_a0 * self.v0
-            - a_max * self.af_af * self.vf))
+                * j_max
+                * (a_max
+                    * a_min
+                    * ((a_max - 2. * self.a0) * self.v0 - (a_min - 2. * self.af) * self.vf)
+                    + a_min * self.a0_a0 * self.v0
+                    - a_max * self.af_af * self.vf))
             / (3. * (a_max - a_min) * self.j_max_j_max)
             + 4. * (a_max * self.vf_vf - a_min * self.v0_v0 - 2. * a_min * a_max * self.pd)
-            / (a_max - a_min);
+                / (a_max - a_min);
 
         if h1 >= 0. {
             h1 = f64::sqrt(h1) / 2.;
@@ -361,9 +361,9 @@ impl PositionThirdOrderStep1 {
             - 6.0 * self.a0_a0 * (a_max * a_max - 2.0 * j_max * self.v0)
             + 6.0 * self.af_af * (a_max * a_max - 2.0 * j_max * self.vf)
             + 12.0
-            * j_max
-            * (j_max * (self.vf_vf - self.v0_v0 - 2.0 * a_max * self.pd)
-            - a_max * a_max * (self.vf - self.v0));
+                * j_max
+                * (j_max * (self.vf_vf - self.v0_v0 - 2.0 * a_max * self.pd)
+                    - a_max * a_max * (self.vf - self.v0));
         let h2_acc0 = -self.af_af + a_max * a_max + 2.0 * j_max * self.vf;
 
         let mut polynom_acc0 = [0.0; 4];
@@ -383,11 +383,11 @@ impl PositionThirdOrderStep1 {
             + 2.0 * (self.af_p3 - self.a0_p3) * a_min / 3.0
             + (self.a0_a0 - self.af_af) * a_min * a_min / 2.0
             + j_max
-            * (self.af_af * self.vf
-            + self.a0_a0 * self.v0
-            + 2.0 * a_min * (j_max * self.pd - self.a0 * self.v0 - self.af * self.vf)
-            + a_min * a_min * (self.v0 + self.vf)
-            + j_max * (self.v0_v0 - self.vf_vf));
+                * (self.af_af * self.vf
+                    + self.a0_a0 * self.v0
+                    + 2.0 * a_min * (j_max * self.pd - self.a0 * self.v0 - self.af * self.vf)
+                    + a_min * a_min * (self.v0 + self.vf)
+                    + j_max * (self.v0_v0 - self.vf_vf));
         let h2_acc1 = self.a0_a0 - self.a0 * a_min + 2.0 * j_max * self.v0;
 
         let mut polynom_acc1 = [0.0; 4];
@@ -441,10 +441,10 @@ impl PositionThirdOrderStep1 {
                 let orig = -h2_h2 / (4.0 * j_max * t)
                     + h2_none * (self.af / j_max + t)
                     + (4.0 * self.a0_p3 + 2.0 * self.af_p3
-                    - 6.0 * self.a0_a0 * (self.af + 2.0 * j_max * t)
-                    + 12.0 * (self.af - self.a0) * j_max * self.v0
-                    + 3.0 * self.j_max_j_max * (-4.0 * self.pd + (h1 + 8.0 * self.v0) * t))
-                    / (12.0 * self.j_max_j_max);
+                        - 6.0 * self.a0_a0 * (self.af + 2.0 * j_max * t)
+                        + 12.0 * (self.af - self.a0) * j_max * self.v0
+                        + 3.0 * self.j_max_j_max * (-4.0 * self.pd + (h1 + 8.0 * self.v0) * t))
+                        / (12.0 * self.j_max_j_max);
                 let deriv = h2_none + 2.0 * self.v0 - self.a0_a0 / j_max
                     + h2_h2 / (4.0 * h1)
                     + (3.0 * h1) / 4.0;
@@ -486,7 +486,8 @@ impl PositionThirdOrderStep1 {
             // Single Newton step (regarding pd)
             if t > f64::EPSILON {
                 let h1 = j_max * t;
-                let orig = h0_acc0 / (12.0 * self.j_max_j_max * t) + t * (h2_acc0 + h1 * (h1 - 2.0 * a_max));
+                let orig = h0_acc0 / (12.0 * self.j_max_j_max * t)
+                    + t * (h2_acc0 + h1 * (h1 - 2.0 * a_max));
                 let deriv = 2.0 * (h2_acc0 + h1 * (2.0 * h1 - 3.0 * a_max));
 
                 let delta_t = orig / deriv;
@@ -528,10 +529,10 @@ impl PositionThirdOrderStep1 {
                 let mut h1 = j_max * t;
                 let mut orig = -(h0_acc1 / 2.0
                     + h1 * (h5
-                    + self.a0 * (a_min - 2.0 * h1) * (a_min - h1)
-                    + self.a0_a0 * (5.0 * h1 / 2.0 - 2.0 * a_min)
-                    + a_min * a_min * h1 / 2.0
-                    + j_max * (h1 / 2.0 - a_min) * (h1 * t + 2.0 * self.v0)))
+                        + self.a0 * (a_min - 2.0 * h1) * (a_min - h1)
+                        + self.a0_a0 * (5.0 * h1 / 2.0 - 2.0 * a_min)
+                        + a_min * a_min * h1 / 2.0
+                        + j_max * (h1 / 2.0 - a_min) * (h1 * t + 2.0 * self.v0)))
                     / j_max;
                 let mut deriv =
                     (a_min - self.a0 - h1) * (h2_acc1 + h1 * (4.0 * self.a0 - a_min + 2.0 * h1));
@@ -541,10 +542,10 @@ impl PositionThirdOrderStep1 {
                 h1 = j_max * t;
                 orig = -(h0_acc1 / 2.0
                     + h1 * (h5
-                    + self.a0 * (a_min - 2.0 * h1) * (a_min - h1)
-                    + self.a0_a0 * (5.0 * h1 / 2.0 - 2.0 * a_min)
-                    + a_min * a_min * h1 / 2.0
-                    + j_max * (h1 / 2.0 - a_min) * (h1 * t + 2.0 * self.v0)))
+                        + self.a0 * (a_min - 2.0 * h1) * (a_min - h1)
+                        + self.a0_a0 * (5.0 * h1 / 2.0 - 2.0 * a_min)
+                        + a_min * a_min * h1 / 2.0
+                        + j_max * (h1 / 2.0 - a_min) * (h1 * t + 2.0 * self.v0)))
                     / j_max;
 
                 if orig.abs() > 1e-9 {
@@ -556,10 +557,10 @@ impl PositionThirdOrderStep1 {
                     h1 = j_max * t;
                     orig = -(h0_acc1 / 2.0
                         + h1 * (h5
-                        + self.a0 * (a_min - 2.0 * h1) * (a_min - h1)
-                        + self.a0_a0 * (5.0 * h1 / 2.0 - 2.0 * a_min)
-                        + a_min * a_min * h1 / 2.0
-                        + j_max * (h1 / 2.0 - a_min) * (h1 * t + 2.0 * self.v0)))
+                            + self.a0 * (a_min - 2.0 * h1) * (a_min - h1)
+                            + self.a0_a0 * (5.0 * h1 / 2.0 - 2.0 * a_min)
+                            + a_min * a_min * h1 / 2.0
+                            + j_max * (h1 / 2.0 - a_min) * (h1 * t + 2.0 * self.v0)))
                         / j_max;
 
                     if orig.abs() > 1e-9 {
@@ -613,11 +614,11 @@ impl PositionThirdOrderStep1 {
             - 24.0 * a_min * j_max * (self.a0 * self.v0 - self.af * self.vf)
             + 6.0 * self.af_af * (a_min * a_min - 2.0 * j_max * self.vf)
             - 12.0
-            * j_max
-            * (2. * a_min * j_max * self.pd
-            + a_min * a_min * (self.vf + v_max)
-            + j_max * (v_max * v_max - self.vf_vf)
-            + a_min * self.a0 * (self.a0_a0 - 2.0 * j_max * (self.v0 + v_max)) / j_max))
+                * j_max
+                * (2. * a_min * j_max * self.pd
+                    + a_min * a_min * (self.vf + v_max)
+                    + j_max * (v_max * v_max - self.vf_vf)
+                    + a_min * self.a0 * (self.a0_a0 - 2.0 * j_max * (self.v0 + v_max)) / j_max))
             / (24.0 * a_min * self.j_max_j_max * v_max);
         profile.t[4] = -a_min / j_max;
         profile.t[5] =
@@ -703,15 +704,15 @@ impl PositionThirdOrderStep1 {
             let h1 = f64::sqrt(
                 2.0 * (2.0 * h2 * h2
                     + h0 * (self.a0_p4 - 6.0 * self.a0_a0 * (self.af_af + 2.0 * j_max * self.vf)
-                    + 8.0
-                    * self.a0
-                    * (self.af_p3
-                    + 3.0 * self.j_max_j_max * self.pd
-                    + 3.0 * self.af * j_max * self.vf)
-                    - 3.0
-                    * (self.af_p4
-                    + 4.0 * self.af_af * j_max * self.vf
-                    + 4.0 * self.j_max_j_max * (self.vf_vf - self.v0_v0)))),
+                        + 8.0
+                            * self.a0
+                            * (self.af_p3
+                                + 3.0 * self.j_max_j_max * self.pd
+                                + 3.0 * self.af * j_max * self.vf)
+                        - 3.0
+                            * (self.af_p4
+                                + 4.0 * self.af_af * j_max * self.vf
+                                + 4.0 * self.j_max_j_max * (self.vf_vf - self.v0_v0)))),
             ) * f64::abs(j_max)
                 / j_max;
             profile.t[0] = (4.0 * self.af_p3 + 2.0 * self.a0_p3 - 6.0 * self.a0 * self.af_af
@@ -784,7 +785,7 @@ impl PositionThirdOrderStep1 {
             profile.t[2] = 0.0;
             profile.t[3] = (self.af_p3 - self.a0_p3) / (3.0 * self.j_max_j_max * v_max)
                 + (self.a0 * self.v0 - self.af * self.vf + (self.af_af * h1) / 2.0)
-                / (j_max * v_max)
+                    / (j_max * v_max)
                 - (self.vf / v_max + 1.0) * h1
                 + self.pd / v_max;
             profile.t[4] = h1;
@@ -813,8 +814,8 @@ impl PositionThirdOrderStep1 {
             profile.t[2] = self.a0 / j_max;
             profile.t[3] = (self.af_p3 - self.a0_p3) / (3.0 * self.j_max_j_max * v_max)
                 + (self.a0 * self.v0 - self.af * self.vf
-                + (self.af_af * h1 + self.a0_p3 / j_max) / 2.0)
-                / (j_max * v_max)
+                    + (self.af_af * h1 + self.a0_p3 / j_max) / 2.0)
+                    / (j_max * v_max)
                 - (self.v0 / v_max + 1.0) * self.a0 / j_max
                 - (self.vf / v_max + 1.0) * h1
                 + self.pd / v_max;
@@ -918,14 +919,14 @@ impl PositionThirdOrderStep1 {
             profile.t[3] = (-self.v0 + q) / self.a0;
             if profile.t[3] >= 0.0
                 && profile.check_with_timing(
-                ControlSigns::UDDU,
-                ReachedLimits::None,
-                0.0,
-                v_max,
-                v_min,
-                a_max,
-                a_min,
-            )
+                    ControlSigns::UDDU,
+                    ReachedLimits::None,
+                    0.0,
+                    v_max,
+                    v_min,
+                    a_max,
+                    a_min,
+                )
             {
                 return true;
             }
@@ -934,14 +935,14 @@ impl PositionThirdOrderStep1 {
             profile.t[3] = -(self.v0 + q) / self.a0;
             if profile.t[3] >= 0.0
                 && profile.check_with_timing(
-                ControlSigns::UDDU,
-                ReachedLimits::None,
-                0.0,
-                v_max,
-                v_min,
-                a_max,
-                a_min,
-            )
+                    ControlSigns::UDDU,
+                    ReachedLimits::None,
+                    0.0,
+                    v_max,
+                    v_min,
+                    a_max,
+                    a_min,
+                )
             {
                 return true;
             }
@@ -958,15 +959,17 @@ impl PositionThirdOrderStep1 {
             ) {
                 return true;
             }
-        } else if f64::abs(self.pd) < f64::EPSILON && profile.check_with_timing(
-            ControlSigns::UDDU,
-            ReachedLimits::None,
-            0.0,
-            v_max,
-            v_min,
-            a_max,
-            a_min,
-        ) {
+        } else if f64::abs(self.pd) < f64::EPSILON
+            && profile.check_with_timing(
+                ControlSigns::UDDU,
+                ReachedLimits::None,
+                0.0,
+                v_max,
+                v_min,
+                a_max,
+                a_min,
+            )
+        {
             return true;
         }
 
@@ -989,8 +992,7 @@ impl PositionThirdOrderStep1 {
             ) {
                 // [p.t_sum.len() - 1] instead of C++ back()
                 block.t_min = p.t_sum[p.t_sum.len() - 1] + p.brake.duration + p.accel.duration;
-                if f64::abs(self.v0) > f64::EPSILON || f64::abs(self.a0) > f64::EPSILON
-                {
+                if f64::abs(self.v0) > f64::EPSILON || f64::abs(self.a0) > f64::EPSILON {
                     block.a = Some(Interval::new(block.t_min, f64::INFINITY));
                 }
                 return true;

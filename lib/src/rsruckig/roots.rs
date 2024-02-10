@@ -8,6 +8,7 @@ pub fn pow2<T: std::ops::Mul<Output = T> + Copy>(v: T) -> T {
     v * v
 }
 
+#[derive(Debug)]
 pub struct Set<T, const N: usize> {
     pub data: ArrayVec<T, N>,
 }
@@ -63,6 +64,7 @@ impl<'a, T, const N: usize> IntoIterator for &'a mut Set<T, N> {
     }
 }
 
+#[derive(Debug)]
 pub struct PositiveSet<const N: usize>(pub Set<f64, N>);
 
 impl<const N: usize> PositiveSet<N> {

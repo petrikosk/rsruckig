@@ -1,6 +1,7 @@
 //! Mathematical equations for Step 2 in first-order position interface: Time synchronization
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+#[derive(Debug)]
 pub struct PositionFirstOrderStep2 {
     tf: f64,
     _v_max: f64,

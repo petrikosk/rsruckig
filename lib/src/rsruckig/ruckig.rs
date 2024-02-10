@@ -9,6 +9,7 @@ use crate::trajectory::Trajectory;
 use std::marker::PhantomData;
 use std::time::Instant;
 
+#[derive(Debug)]
 pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
     current_input: InputParameter<DOF>,
     current_input_initialized: bool,

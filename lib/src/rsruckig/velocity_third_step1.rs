@@ -5,6 +5,7 @@ use crate::{
     profile::{ControlSigns, Profile, ReachedLimits},
 };
 
+#[derive(Debug)]
 pub struct VelocityThirdOrderStep1 {
     a0: f64,
     af: f64,

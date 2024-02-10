@@ -40,7 +40,7 @@ pub trait RuckigErrorHandler {
     ) -> Result<RuckigResult, RuckigError>;
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ThrowErrorHandler;
 
 impl RuckigErrorHandler for ThrowErrorHandler {
@@ -55,7 +55,7 @@ impl RuckigErrorHandler for ThrowErrorHandler {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct IgnoreErrorHandler;
 
 impl RuckigErrorHandler for IgnoreErrorHandler {

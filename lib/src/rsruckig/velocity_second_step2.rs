@@ -1,9 +1,8 @@
 //! Mathematical equations for Step 2 in second-order velocity interface: Time synchronization
 
-use crate::{
-    profile::{ControlSigns, Profile, ReachedLimits},
-};
+use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+#[derive(Debug)]
 pub struct VelocitySecondOrderStep2 {
     tf: f64,
     _a_max: f64,
