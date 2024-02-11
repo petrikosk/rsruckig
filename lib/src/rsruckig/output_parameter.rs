@@ -3,9 +3,9 @@ use std::ops::Deref;
 
 use crate::input_parameter::InputParameter;
 use crate::trajectory::Trajectory;
-use crate::util::{DataArrayOrVec, join};
+use crate::util::{join, DataArrayOrVec};
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OutputParameter<const DOF: usize> {
     pub degrees_of_freedom: usize,
     pub trajectory: Trajectory<DOF>,
@@ -62,7 +62,11 @@ impl<const DOF: usize> fmt::Display for OutputParameter<DOF> {
             "out.new_acceleration = [{}]",
             join::<DOF>(self.new_acceleration.deref(), true)
         )?;
-        writeln!(f, "out.new_jerk = [{}]", join::<DOF>(self.new_jerk.deref(), true))?;
+        writeln!(
+            f,
+            "out.new_jerk = [{}]",
+            join::<DOF>(self.new_jerk.deref(), true)
+        )?;
         writeln!(f, "out.time = [{}]", self.time)?;
         writeln!(
             f,
