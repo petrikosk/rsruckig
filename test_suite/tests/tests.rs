@@ -1122,3 +1122,39 @@ fn test_zero_limits() {
     assert_eq!(result.unwrap(), RuckigResult::Working);
     assert_float_eq!(output.trajectory.get_duration(), 1.1, abs <= 0.000_1);
 }
+
+#[test]
+fn test_min_duration() -> Result<(), RuckigError> {
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    //let mut output = OutputParameter::new(None);
+
+    input.current_position[0] = 0.0;
+    input.current_velocity[0] = 0.0;
+    input.current_acceleration[0] = 0.0;
+
+    input.target_position[0] = 1.0;
+    input.target_velocity[0] = 1.0;
+    input.target_acceleration[0] = 1.0;
+
+    input.max_velocity[0] = 1.0;
+    input.max_acceleration[0] = 2.0;
+    input.max_jerk[0] = 3.0;
+
+    input.minimum_duration = None;
+    input.synchronization = Synchronization::None;
+    let mut trajectory = Trajectory::new(Some(1));
+    otg.calculate(&input, &mut trajectory)?;
+
+    let duration = trajectory.duration.clone();
+
+    let mut trajectory_min_duration = Trajectory::new(Some(1));
+    input.minimum_duration = Some(5.0);
+    otg.calculate(&input, &mut trajectory_min_duration)?;
+    let new_duration = trajectory_min_duration.duration.clone();
+    dbg!(duration, new_duration);
+    assert!(new_duration > duration);
+    assert!(new_duration > 5.0);
+
+    Ok(())
+}
