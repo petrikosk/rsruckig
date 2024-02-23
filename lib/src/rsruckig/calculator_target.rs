@@ -1,5 +1,6 @@
 //! Calculation of a state-to-state trajectory.
 use crate::error::{RuckigError, RuckigErrorHandler};
+use crate::util::DataArrayOrVec;
 use crate::{
     block::Block,
     input_parameter::{ControlInterface, DurationDiscretization, InputParameter, Synchronization},
@@ -17,7 +18,6 @@ use crate::{
     velocity_third_step1::VelocityThirdOrderStep1,
     velocity_third_step2::VelocityThirdOrderStep2,
 };
-use crate::util::DataArrayOrVec;
 
 #[derive(Default, Debug)]
 pub struct TargetCalculator<const DOF: usize> {
@@ -244,7 +244,8 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             *limiting_dof = Some(i % self.degrees_of_freedom);
             match div {
                 0 => {
-                    profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()].p_min.clone();
+                    profiles[limiting_dof.unwrap()] =
+                        self.blocks[limiting_dof.unwrap()].p_min.clone();
                 }
                 1 => {
                     profiles[limiting_dof.unwrap()] = self.blocks[limiting_dof.unwrap()]
@@ -288,14 +289,16 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                 .as_ref()
                 .map_or(-inp.max_acceleration[dof], |v| v[dof]);
 
-            self.inp_per_dof_control_interface = DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.control_interface.clone());
+            self.inp_per_dof_control_interface =
+                DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.control_interface.clone());
             if let Some(per_dof_control_interface) = &inp.per_dof_control_interface {
                 for (dof, value) in per_dof_control_interface.iter().enumerate() {
                     *self.inp_per_dof_control_interface.get_mut(dof).unwrap() = value.clone();
                 }
             }
 
-            self.inp_per_dof_synchronization = DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.synchronization.clone());
+            self.inp_per_dof_synchronization =
+                DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.synchronization.clone());
             if let Some(per_dof_synchronization) = &inp.per_dof_synchronization {
                 for (dof, value) in per_dof_synchronization.iter().enumerate() {
                     *self.inp_per_dof_synchronization.get_mut(dof).unwrap() = value.clone();
@@ -484,10 +487,10 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             if !found_profile {
                 let has_zero_limits = inp.max_acceleration[dof] == 0.0
                     || inp
-                        .min_acceleration
-                        .as_ref()
-                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                        == 0.0
+                    .min_acceleration
+                    .as_ref()
+                    .map_or(-inp.max_acceleration[dof], |v| v[dof])
+                    == 0.0
                     || inp.max_jerk[dof] == 0.0;
                 if has_zero_limits {
                     return T::handle_calculator_error(
@@ -495,7 +498,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             "zero limits conflict in step 1, dof: {} input: {}",
                             dof, inp
                         )
-                        .to_owned(),
+                            .to_owned(),
                         RuckigResult::ErrorZeroLimits,
                     );
                 }
@@ -508,7 +511,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             traj.independent_min_durations[dof] = self.blocks[dof].t_min;
         }
         let discrete_duration = inp.duration_discretization == DurationDiscretization::Discrete;
-        if self.degrees_of_freedom == 1 && inp.minimum_duration.is_some() && !discrete_duration {
+        if self.degrees_of_freedom == 1 && inp.minimum_duration.is_none() && !discrete_duration {
             traj.duration = self.blocks[0].t_min;
             traj.profiles[0][0] = self.blocks[0].p_min.clone();
             traj.cumulative_times[0] = traj.duration;
@@ -529,10 +532,10 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             for dof in 0..self.degrees_of_freedom {
                 if inp.max_acceleration[dof] == 0.0
                     || inp
-                        .min_acceleration
-                        .as_ref()
-                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                        == 0.0
+                    .min_acceleration
+                    .as_ref()
+                    .map_or(-inp.max_acceleration[dof], |v| v[dof])
+                    == 0.0
                     || inp.max_jerk[dof] == 0.0
                 {
                     has_zero_limits = true;
@@ -576,9 +579,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
         if !discrete_duration
             && self
-                .inp_per_dof_synchronization
-                .iter()
-                .all(|s| s == &Synchronization::None)
+            .inp_per_dof_synchronization
+            .iter()
+            .all(|s| s == &Synchronization::None)
         {
             return Ok(RuckigResult::Working);
         }
@@ -734,9 +737,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
                     if found_time_synchronization
                         && self
-                            .inp_per_dof_synchronization
-                            .iter()
-                            .all(|s| s == &Synchronization::Phase || s == &Synchronization::None)
+                        .inp_per_dof_synchronization
+                        .iter()
+                        .all(|s| s == &Synchronization::Phase || s == &Synchronization::None)
                     {
                         return Ok(RuckigResult::Working);
                     }

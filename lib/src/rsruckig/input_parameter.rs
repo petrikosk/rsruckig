@@ -48,7 +48,6 @@ pub struct InputParameter<const DOF: usize> {
     pub per_dof_control_interface: Option<DataArrayOrVec<ControlInterface, DOF>>,
     pub per_dof_synchronization: Option<DataArrayOrVec<Synchronization, DOF>>,
     pub minimum_duration: Option<f64>,
-    pub per_section_minimum_duration: Option<DataArrayOrVec<f64, DOF>>,
     pub interrupt_calculation_duration: Option<f64>,
 }
 
@@ -65,7 +64,6 @@ impl<const DOF: usize> PartialEq for InputParameter<DOF> {
             && self.max_jerk == other.max_jerk
             && self.enabled == other.enabled
             && self.minimum_duration == other.minimum_duration
-            && self.per_section_minimum_duration == other.per_section_minimum_duration
             && self.min_velocity == other.min_velocity
             && self.min_acceleration == other.min_acceleration
             && self.control_interface == other.control_interface
@@ -98,7 +96,6 @@ impl<const DOF: usize> InputParameter<DOF> {
             per_dof_control_interface: None,
             per_dof_synchronization: None,
             minimum_duration: None,
-            per_section_minimum_duration: None,
             interrupt_calculation_duration: None,
         }
     }
@@ -248,7 +245,9 @@ impl<const DOF: usize> InputParameter<DOF> {
                     }
                 }
                 if check_current_state_within_limits {
-                    if a0 > 0.0 && j_max > 0.0 && InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max) > v_max
+                    if a0 > 0.0
+                        && j_max > 0.0
+                        && InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max) > v_max
                     {
                         return E::handle_validation_error(&format!("DoF {} will inevitably reach a velocity {} from the current kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(v0, a0, j_max), v_max));
                     }
@@ -260,7 +259,9 @@ impl<const DOF: usize> InputParameter<DOF> {
                     }
                 }
                 if check_target_state_within_limits {
-                    if af < 0.0 && j_max > 0.0 && InputParameter::<DOF>::v_at_a_zero(vf, af, j_max) > v_max
+                    if af < 0.0
+                        && j_max > 0.0
+                        && InputParameter::<DOF>::v_at_a_zero(vf, af, j_max) > v_max
                     {
                         return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will exceed its maximum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(vf, af, j_max), v_max));
                     }
@@ -336,10 +337,18 @@ impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
             "inp.max_acceleration = [{}]",
             join::<DOF>(self.max_acceleration.deref(), true)
         )?;
-        writeln!(f, "inp.max_jerk = [{}]", join::<DOF>(self.max_jerk.deref(), true))?;
+        writeln!(
+            f,
+            "inp.max_jerk = [{}]",
+            join::<DOF>(self.max_jerk.deref(), true)
+        )?;
 
         if let Some(min_vel) = &self.min_velocity {
-            writeln!(f, "inp.min_velocity = [{}]", join::<DOF>(min_vel.deref(), true))?;
+            writeln!(
+                f,
+                "inp.min_velocity = [{}]",
+                join::<DOF>(min_vel.deref(), true)
+            )?;
         }
         if let Some(min_acc) = &self.min_acceleration {
             writeln!(
