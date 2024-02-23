@@ -137,17 +137,17 @@ fn test_secondary() {
     assert!(almost_equal_vecs(
         &new_position,
         &input.target_position,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &new_velocity,
         &input.target_velocity,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &new_acceleration,
         &input.target_acceleration,
-        0.000_1
+        0.000_1,
     ));
 
     output.trajectory.at_time(
@@ -162,7 +162,7 @@ fn test_secondary() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.5, -2.6871268303003437, 1.0],
-        0.000_1
+        0.000_1,
     ));
     assert_eq!(new_jerk, DataArrayOrVec::Stack([0.0, 0.0, -1.0]));
     assert_eq!(new_section, Some(0));
@@ -344,17 +344,17 @@ fn test_enabled() {
     assert!(almost_equal_vecs(
         &new_position,
         &input.current_position,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &new_velocity,
         &input.current_velocity,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &new_acceleration,
         &input.current_acceleration,
-        0.000_1
+        0.000_1,
     ));
 
     output.trajectory.at_time(
@@ -368,7 +368,7 @@ fn test_enabled() {
     assert!(almost_equal_vecs(
         &new_position,
         &[input.target_position[0], -1.6825197896, -1.0079368399],
-        0.000_1
+        0.000_1,
     ));
 
     // Make sure that disabled DoFs overwrite prior blocks
@@ -430,12 +430,12 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     let result = otg.update(&input, &mut output);
@@ -453,18 +453,18 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.0833333333, -2.0833333333, 0.1666666667],
-        0.000_1
+        0.000_1,
     ));
 
     assert!(almost_equal_vecs(
         &output.trajectory.get_profiles()[0][0].t,
         &output.trajectory.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &output.trajectory.get_profiles()[0][0].t,
         &output.trajectory.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
@@ -491,17 +491,17 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.8333333333, -2.0833333333, 0.1666666667],
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &output.trajectory.get_profiles()[0][0].t,
         &output.trajectory.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &output.trajectory.get_profiles()[0][0].t,
         &output.trajectory.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     // Test equal start and target state
@@ -524,12 +524,12 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &output.trajectory.get_profiles()[0][0].t,
         &output.trajectory.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &output.trajectory.get_profiles()[0][0].t,
         &output.trajectory.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
@@ -549,12 +549,12 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
@@ -585,12 +585,12 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     input.max_velocity = DataArrayOrVec::Stack([1.0, 0.2, 1.0]);
@@ -620,12 +620,12 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     input.max_jerk = DataArrayOrVec::Stack([1.0, 0.1, 1.0]);
@@ -636,12 +636,12 @@ fn test_phase_synchronization() {
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 
     input.target_acceleration = DataArrayOrVec::Stack([0.01, 0.0, 0.0]);
@@ -743,7 +743,7 @@ fn test_per_dof_setting() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.5, -2.6871268303, 1.0],
-        0.000_1
+        0.000_1,
     ));
 
     input.control_interface = ControlInterface::Velocity;
@@ -764,7 +764,7 @@ fn test_per_dof_setting() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.0, -1.8641718534, 0.0],
-        0.000_1
+        0.000_1,
     ));
 
     input.per_dof_control_interface = Some(DataArrayOrVec::Stack([
@@ -801,7 +801,7 @@ fn test_per_dof_setting() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.5, -1.5643167673, 1.0],
-        0.000_1
+        0.000_1,
     ));
 
     input.control_interface = ControlInterface::Position;
@@ -829,7 +829,7 @@ fn test_per_dof_setting() {
     assert!(almost_equal_vecs(
         &new_position,
         &[0.7482143874, -2.6871268303, 1.0],
-        0.000_1
+        0.000_1,
     ));
 
     let independent_min_durations = traj.get_independent_min_durations();
@@ -959,7 +959,7 @@ fn test_per_dof_setting() {
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][2].t,
-        0.000_1
+        0.000_1,
     ));
 }
 
@@ -1001,17 +1001,17 @@ fn test_dynamic_dofs() {
     assert!(almost_equal_vecs(
         &new_position,
         &input.current_position,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &new_velocity,
         &input.current_velocity,
-        0.000_1
+        0.000_1,
     ));
     assert!(almost_equal_vecs(
         &new_acceleration,
         &input.current_acceleration,
-        0.000_1
+        0.000_1,
     ));
 }
 
@@ -1153,7 +1153,7 @@ fn test_min_duration() -> Result<(), RuckigError> {
     let new_duration = trajectory_min_duration.duration.clone();
     dbg!(duration, new_duration);
     assert!(new_duration > duration);
-    assert!(new_duration >= 5.0);
+    assert_float_eq!(new_duration, 5.0, abs <= 0.000_1);
 
     Ok(())
 }
