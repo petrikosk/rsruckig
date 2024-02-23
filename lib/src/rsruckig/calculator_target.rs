@@ -52,6 +52,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             degrees_of_freedom: dofs.unwrap_or(DOF),
         }
     }
+
+    // Allowing mutable reference to self for the sake of better performance.
+    #[allow(clippy::wrong_self_convention)]
     fn is_input_collinear(
         &mut self,
         inp: &InputParameter<DOF>,
@@ -487,10 +490,10 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             if !found_profile {
                 let has_zero_limits = inp.max_acceleration[dof] == 0.0
                     || inp
-                    .min_acceleration
-                    .as_ref()
-                    .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                    == 0.0
+                        .min_acceleration
+                        .as_ref()
+                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
+                        == 0.0
                     || inp.max_jerk[dof] == 0.0;
                 if has_zero_limits {
                     return T::handle_calculator_error(
@@ -498,7 +501,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             "zero limits conflict in step 1, dof: {} input: {}",
                             dof, inp
                         )
-                            .to_owned(),
+                        .to_owned(),
                         RuckigResult::ErrorZeroLimits,
                     );
                 }
@@ -532,10 +535,10 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             for dof in 0..self.degrees_of_freedom {
                 if inp.max_acceleration[dof] == 0.0
                     || inp
-                    .min_acceleration
-                    .as_ref()
-                    .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                    == 0.0
+                        .min_acceleration
+                        .as_ref()
+                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
+                        == 0.0
                     || inp.max_jerk[dof] == 0.0
                 {
                     has_zero_limits = true;
@@ -579,9 +582,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
         if !discrete_duration
             && self
-            .inp_per_dof_synchronization
-            .iter()
-            .all(|s| s == &Synchronization::None)
+                .inp_per_dof_synchronization
+                .iter()
+                .all(|s| s == &Synchronization::None)
         {
             return Ok(RuckigResult::Working);
         }
@@ -737,9 +740,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
                     if found_time_synchronization
                         && self
-                        .inp_per_dof_synchronization
-                        .iter()
-                        .all(|s| s == &Synchronization::Phase || s == &Synchronization::None)
+                            .inp_per_dof_synchronization
+                            .iter()
+                            .all(|s| s == &Synchronization::Phase || s == &Synchronization::None)
                     {
                         return Ok(RuckigResult::Working);
                     }
