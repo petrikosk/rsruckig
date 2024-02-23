@@ -3,7 +3,7 @@ use crate::profile::Profile;
 use crate::util::{integrate, DataArrayOrVec};
 
 // We'll use Vec<T> instead of CustomVector<T, DOF>
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Trajectory<const DOF: usize> {
     pub profiles: Vec<DataArrayOrVec<Profile, DOF>>,
     pub duration: f64,

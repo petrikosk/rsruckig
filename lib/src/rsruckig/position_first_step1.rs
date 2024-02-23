@@ -2,6 +2,7 @@
 use crate::block::Block;
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+#[derive(Debug)]
 pub struct PositionFirstOrderStep1 {
     _v_max: f64,
     _v_min: f64,

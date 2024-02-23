@@ -4,6 +4,7 @@ use crate::{
     profile::{ControlSigns, Profile, ReachedLimits},
 };
 
+#[derive(Debug)]
 pub struct PositionSecondOrderStep1 {
     v0: f64,
     vf: f64,
