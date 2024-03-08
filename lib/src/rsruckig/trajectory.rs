@@ -16,12 +16,12 @@ pub struct Trajectory<const DOF: usize> {
 impl<const DOF: usize> Default for Trajectory<DOF> {
     fn default() -> Self {
         Self {
-            profiles: vec![DataArrayOrVec::new(Some(1), Profile::default())],
+            profiles: vec![DataArrayOrVec::new(None, Profile::default())],
             duration: Default::default(),
-            cumulative_times: DataArrayOrVec::new(Some(1), 0.0),
-            independent_min_durations: DataArrayOrVec::new(Some(1), 0.0),
-            position_extrema: DataArrayOrVec::new(Some(1), Bound::default()),
-            degrees_of_freedom: 1,
+            cumulative_times: DataArrayOrVec::new(None, 0.0),
+            independent_min_durations: DataArrayOrVec::new(None, 0.0),
+            position_extrema: DataArrayOrVec::new(None, Bound::default()),
+            degrees_of_freedom: DOF,
         }
     }
 }

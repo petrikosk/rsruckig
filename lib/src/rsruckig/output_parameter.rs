@@ -5,7 +5,7 @@ use crate::input_parameter::InputParameter;
 use crate::trajectory::Trajectory;
 use crate::util::{join, DataArrayOrVec};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct OutputParameter<const DOF: usize> {
     pub degrees_of_freedom: usize,
     pub trajectory: Trajectory<DOF>,
@@ -19,6 +19,12 @@ pub struct OutputParameter<const DOF: usize> {
     pub new_calculation: bool,
     pub was_calculation_interrupted: bool,
     pub calculation_duration: f64,
+}
+
+impl<const DOF: usize> Default for OutputParameter<DOF> {
+    fn default() -> Self {
+        Self::new(None)
+    }
 }
 
 impl<const DOF: usize> OutputParameter<DOF> {

@@ -27,7 +27,7 @@ pub enum DurationDiscretization {
     Discrete,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct InputParameter<const DOF: usize> {
     pub degrees_of_freedom: usize,
     pub control_interface: ControlInterface,
@@ -71,6 +71,12 @@ impl<const DOF: usize> PartialEq for InputParameter<DOF> {
             && self.duration_discretization == other.duration_discretization
             && self.per_dof_control_interface == other.per_dof_control_interface
             && self.per_dof_synchronization == other.per_dof_synchronization
+    }
+}
+
+impl<const DOF: usize> Default for InputParameter<DOF> {
+    fn default() -> Self {
+        Self::new(None)
     }
 }
 

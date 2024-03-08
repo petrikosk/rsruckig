@@ -19,7 +19,7 @@ use crate::{
     velocity_third_step2::VelocityThirdOrderStep2,
 };
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct TargetCalculator<const DOF: usize> {
     eps: f64,
     return_error_at_maximal_duration: bool,
