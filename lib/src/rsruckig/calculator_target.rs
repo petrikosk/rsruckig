@@ -139,7 +139,8 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                 return false;
             }
 
-            self.new_phase_control[dof] = control_limiting * current_scale / scale_limiting;
+            self.new_phase_control[dof] =
+                scale_limiting.signum() * control_limiting * current_scale / scale_limiting;
         }
 
         true
