@@ -1157,3 +1157,72 @@ fn test_min_duration() -> Result<(), RuckigError> {
 
     Ok(())
 }
+
+// Passes
+#[test]
+fn test_matched_signs() {
+    let mut otg = Ruckig::<2, ThrowErrorHandler>::new(None, 0.01);
+
+    let mut input = InputParameter::new(None);
+    input.synchronization = Synchronization::Phase;
+
+    // DOF0 will have positive velocity, moving from 0.0 -> 1.0
+    // DOF1 will have positive velocity, moving from 0.0 -> 2.0
+    input.current_position = daov_stack![0.0, 0.0];
+    input.target_position = daov_stack![1.0, 2.0];
+
+    // Start and end at standstill
+    input.current_velocity = daov_stack![0.0, 0.0];
+    input.target_velocity = daov_stack![0.0, 0.0];
+
+    // Limits
+    input.max_velocity = daov_stack![1.0, 1000.0];
+    input.max_acceleration = daov_stack![10.0, 1000.0];
+
+    let mut trajectory = Trajectory::new(None);
+
+    let _result = otg
+        .calculate(&input, &mut trajectory)
+        .expect("This trajectory is solvable.");
+
+    let profiles = trajectory.get_profiles().get(0).unwrap();
+    let dof0_profile = profiles.get(0).unwrap();
+    let dof1_profile = profiles.get(1).unwrap();
+
+    assert_eq!(dof0_profile.t, dof1_profile.t);
+}
+
+// Fails
+#[test]
+fn test_mixed_signs() {
+    let mut otg = Ruckig::<2, ThrowErrorHandler>::new(None, 0.01);
+
+    let mut input = InputParameter::new(None);
+    input.synchronization = Synchronization::Phase;
+
+    // DOF0 will have negative velocity, moving from 1.0 -> 0.0
+    // DOF1 will have positive velocity, moving from 0.0 -> 2.0
+    input.current_position = daov_stack![1.0, 0.0];
+    input.target_position = daov_stack![0.0, 2.0];
+    //                                  ^^^^
+
+    // Start and end at standstill
+    input.current_velocity = daov_stack![0.0, 0.0];
+    input.target_velocity = daov_stack![0.0, 0.0];
+
+    // Limits
+    input.max_velocity = daov_stack![1.0, 1000.0];
+    input.max_acceleration = daov_stack![10.0, 1000.0];
+
+    let mut trajectory = Trajectory::new(None);
+
+    let _result = otg
+        .calculate(&input, &mut trajectory)
+        .expect("This trajectory is solvable.");
+
+    let profiles = trajectory.get_profiles().get(0).unwrap();
+    let dof0_profile = profiles.get(0).unwrap();
+    let dof1_profile = profiles.get(1).unwrap();
+
+    assert_eq!(dof0_profile.t, dof1_profile.t);
+}

@@ -558,18 +558,18 @@ impl Profile {
             }
         }
 
-        let direction = if v_max > 0.0 {
+        self.direction = if v_max > 0.0 {
             Direction::UP
         } else {
             Direction::DOWN
         };
 
-        let v_upp_lim = if direction == Direction::UP {
+        let v_upp_lim = if self.direction == Direction::UP {
             v_max + V_EPS
         } else {
             v_min + V_EPS
         };
-        let v_low_lim = if direction == Direction::UP {
+        let v_low_lim = if self.direction == Direction::UP {
             v_min - V_EPS
         } else {
             v_max - V_EPS
