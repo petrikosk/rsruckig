@@ -1158,9 +1158,8 @@ fn test_min_duration() -> Result<(), RuckigError> {
     Ok(())
 }
 
-// Passes
 #[test]
-fn test_matched_signs() {
+fn test_matched_signs_phase_sync() {
     let mut otg = Ruckig::<2, ThrowErrorHandler>::new(None, 0.01);
 
     let mut input = InputParameter::new(None);
@@ -1192,9 +1191,8 @@ fn test_matched_signs() {
     assert_eq!(dof0_profile.t, dof1_profile.t);
 }
 
-// Fails
 #[test]
-fn test_mixed_signs() {
+fn test_mixed_signs_phase_sync() {
     let mut otg = Ruckig::<2, ThrowErrorHandler>::new(None, 0.01);
 
     let mut input = InputParameter::new(None);
@@ -1204,7 +1202,6 @@ fn test_mixed_signs() {
     // DOF1 will have positive velocity, moving from 0.0 -> 2.0
     input.current_position = daov_stack![1.0, 0.0];
     input.target_position = daov_stack![0.0, 2.0];
-    //                                  ^^^^
 
     // Start and end at standstill
     input.current_velocity = daov_stack![0.0, 0.0];
