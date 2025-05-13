@@ -66,8 +66,6 @@ pub mod velocity_third_step2;
 
 /// Re-exports of the most commonly used types
 pub mod prelude {
-    pub use super::daov_heap;
-    pub use super::daov_stack;
     pub use super::error::RuckigError;
     pub use super::error::{IgnoreErrorHandler, RuckigErrorHandler, ThrowErrorHandler};
     pub use super::input_parameter::{
@@ -79,4 +77,9 @@ pub mod prelude {
     pub use super::ruckig::Ruckig;
     pub use super::trajectory::Trajectory;
     pub use super::util::DataArrayOrVec;
+    
+    // Also re-export the macros for convenience
+    pub use crate::daov_stack;
+    pub use crate::daov_heap;
+    pub use crate::count_exprs;
 }

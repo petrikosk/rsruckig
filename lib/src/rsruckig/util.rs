@@ -190,6 +190,15 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArra
     }
 }
 
+/// Helper macro for counting elements in a sequence.
+/// This is used internally by the daov_stack and daov_heap macros.
+#[macro_export]
+macro_rules! count_exprs {
+    () => (0);
+    ($x:expr) => (1);
+    ($x:expr, $($rest:expr),*) => (1 + count_exprs!($($rest),*));
+}
+
 /// Creates a stack-allocated `DataArrayOrVec` instance with fixed-size array storage.
 ///
 /// This macro simplifies the creation of stack-allocated vectors for kinematic data.
@@ -201,7 +210,7 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArra
 /// use rsruckig::prelude::*;
 /// 
 /// // Create a stack-allocated array with 3 elements
-/// let positions = daov_stack![0.0, 1.0, 2.0];
+/// let positions: DataArrayOrVec<f64, 3> = daov_stack![0.0, 1.0, 2.0];
 ///
 /// // Access elements via indexing
 /// assert_eq!(positions[0], 0.0);
@@ -215,7 +224,7 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArra
 /// use rsruckig::prelude::*;
 /// 
 /// // Create a stack-allocated array with 5 zeros
-/// let zeros = daov_stack![0.0; 5];
+/// let zeros: DataArrayOrVec<f64, 5> = daov_stack![0.0; 5];
 ///
 /// assert_eq!(zeros[0], 0.0);
 /// assert_eq!(zeros[4], 0.0);
@@ -224,13 +233,13 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArra
 macro_rules! daov_stack {
     ($($x:expr),+ $(,)?) => {
         {
-            let temp: [_; $crate::count_exprs!($($x),*)] = [$($x),*];
-            $crate::rsruckig::util::DataArrayOrVec::Stack(temp)
+            let temp = [$($x),*];
+            rsruckig::prelude::DataArrayOrVec::Stack(temp)
         }
     };
     ($x:expr; $n:expr) => {
         {
-            $crate::rsruckig::util::DataArrayOrVec::Stack([$x; $n])
+            rsruckig::prelude::DataArrayOrVec::Stack([$x; $n])
         }
     };
 }
@@ -247,7 +256,7 @@ macro_rules! daov_stack {
 /// use rsruckig::prelude::*;
 /// 
 /// // Create a heap-allocated vector with 3 elements
-/// let velocities = daov_heap![0.0, 1.0, 2.0];
+/// let velocities: DataArrayOrVec<f64, 3> = daov_heap![0.0, 1.0, 2.0];
 ///
 /// // Access elements via indexing
 /// assert_eq!(velocities[0], 0.0);
@@ -261,7 +270,7 @@ macro_rules! daov_stack {
 /// use rsruckig::prelude::*;
 /// 
 /// // Create a heap-allocated vector with 5 zeros
-/// let zeros = daov_heap![0.0; 5];
+/// let zeros: DataArrayOrVec<f64, 5> = daov_heap![0.0; 5];
 ///
 /// assert_eq!(zeros[0], 0.0);
 /// assert_eq!(zeros[4], 0.0);
@@ -270,20 +279,13 @@ macro_rules! daov_stack {
 macro_rules! daov_heap {
     ($($x:expr),+ $(,)?) => {
         {
-            let temp: [_; $crate::count_exprs!($($x),*)] = [$($x),*];
-            $crate::rsruckig::util::DataArrayOrVec::Heap(temp.into())
+            let temp = [$($x),*];
+            rsruckig::prelude::DataArrayOrVec::Heap(temp.into())
         }
     };
     ($x:expr; $n:expr) => {
         {
-            $crate::rsruckig::util::DataArrayOrVec::Heap(vec![$x; $n])
+            rsruckig::prelude::DataArrayOrVec::Heap(vec![$x; $n])
         }
     };
-}
-
-// Secondary macro for calculating array size.
-#[macro_export]
-macro_rules! count_exprs {
-    ($x:expr) => (1usize);
-    ($x:expr, $($xs:expr),* $(,)?) => (1usize + $crate::count_exprs!($($xs),*));
 }

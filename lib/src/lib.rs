@@ -94,8 +94,6 @@ See the documentation for individual modules and types for more details.
 
 pub mod rsruckig;
 
-/// Module documentation for the RSRuckig library components:
-
 /// Re-exports of the most commonly used types
 /// 
 /// This module provides easy access to the most commonly used types in the RSRuckig library.
@@ -103,8 +101,7 @@ pub mod prelude {
     pub use crate::rsruckig::prelude::*;
 }
 
-// Re-export macros from rsruckig module for documentation
-/// Convenience macro for heap-allocated degrees of freedom
+// Re-export macros from rsruckig module
 pub use crate::rsruckig::daov_heap;
-/// Convenience macro for stack-allocated degrees of freedom
 pub use crate::rsruckig::daov_stack;
+pub use crate::rsruckig::count_exprs;
