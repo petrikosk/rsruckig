@@ -31,7 +31,6 @@ fn test_known_trajectory() {
     let mut otg = Ruckig::<3, IgnoreErrorHandler>::new(None, 0.004);
     let mut input = InputParameter::new(None);
 
-
     input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.current_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
@@ -113,14 +112,20 @@ fn test_known_trajectory() {
     input.max_jerk = DataArrayOrVec::Stack([0.2, 0.2, 0.2]);
     check_duration(&mut otg, &input, 1.493805);
 
-    input.current_position = DataArrayOrVec::Stack([-5.54640573838539, -2.34195463203842, 5.10070661762967]);
-    input.current_velocity = DataArrayOrVec::Stack([0.824843228617216, -1.03863337183304, -0.749451523227729]);
-    input.current_acceleration = DataArrayOrVec::Stack([-0.119403564898501, 0.923861820607788, 3.04022341347259]);
-    input.target_position = DataArrayOrVec::Stack([-1.58293112753888, 0.383405919465141, 5.79349604610299]);
+    input.current_position =
+        DataArrayOrVec::Stack([-5.54640573838539, -2.34195463203842, 5.10070661762967]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([0.824843228617216, -1.03863337183304, -0.749451523227729]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-0.119403564898501, 0.923861820607788, 3.04022341347259]);
+    input.target_position =
+        DataArrayOrVec::Stack([-1.58293112753888, 0.383405919465141, 5.79349604610299]);
     input.target_velocity = DataArrayOrVec::Stack([-1.59453676324393, 0.0, -0.0693173526513803]);
     input.target_acceleration = DataArrayOrVec::Stack([-0.664429703711622, 0.0, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([12.9892953062198, 3.74169932927481, 1.42398447457303]);
-    input.max_acceleration = DataArrayOrVec::Stack([4.2162106624246, 10.2906731766853, 2.1869079548297]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([12.9892953062198, 3.74169932927481, 1.42398447457303]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([4.2162106624246, 10.2906731766853, 2.1869079548297]);
     input.max_jerk = DataArrayOrVec::Stack([
         8.03496976453435,
         0.200684346397485 - 1.0e-14,
@@ -128,14 +133,21 @@ fn test_known_trajectory() {
     ]);
     check_duration(&mut otg, &input, 1921.0797627836);
 
-    input.current_position = DataArrayOrVec::Stack([-6.49539540831446, 6.14883133273172, -2.02636240900911]);
-    input.current_velocity = DataArrayOrVec::Stack([-1.14327601654428, 0.00991019970085593, -1.00932863927626]);
-    input.current_acceleration = DataArrayOrVec::Stack([-1.73501068960131, -0.584885092422228, 0.0]);
-    input.target_position = DataArrayOrVec::Stack([4.4676187540058, 2.93367894961155, -0.646008452514058]);
-    input.target_velocity = DataArrayOrVec::Stack([-0.544559915133859, 0.298517792372943, 1.6058847848484]);
+    input.current_position =
+        DataArrayOrVec::Stack([-6.49539540831446, 6.14883133273172, -2.02636240900911]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([-1.14327601654428, 0.00991019970085593, -1.00932863927626]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-1.73501068960131, -0.584885092422228, 0.0]);
+    input.target_position =
+        DataArrayOrVec::Stack([4.4676187540058, 2.93367894961155, -0.646008452514058]);
+    input.target_velocity =
+        DataArrayOrVec::Stack([-0.544559915133859, 0.298517792372943, 1.6058847848484]);
     input.target_acceleration = DataArrayOrVec::Stack([-1.31832055647831, 0.0, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([8.65978706670502, 5.94921088330542, 10.7652253566829]);
-    input.max_acceleration = DataArrayOrVec::Stack([3.40137210377608, 4.04166318018487, 10.8617860610581]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([8.65978706670502, 5.94921088330542, 10.7652253566829]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([3.40137210377608, 4.04166318018487, 10.8617860610581]);
     input.max_jerk = DataArrayOrVec::Stack([
         10.9542353113865,
         3.11056302676629,
@@ -143,14 +155,20 @@ fn test_known_trajectory() {
     ]);
     check_full_duration(&mut otg, &mut input, 4.6277455678);
 
-    input.current_position = DataArrayOrVec::Stack([7.06378251402596, -2.4834697862831, -0.843847405371359]);
-    input.current_velocity = DataArrayOrVec::Stack([0.436985859305842, 0.0708113515655622, -0.751266816040307]);
-    input.current_acceleration = DataArrayOrVec::Stack([-0.80835350359544, 0.0, -0.355284934641626]);
-    input.target_position = DataArrayOrVec::Stack([4.40606827118048, -2.84629921001043, -2.91829890043522]);
+    input.current_position =
+        DataArrayOrVec::Stack([7.06378251402596, -2.4834697862831, -0.843847405371359]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([0.436985859305842, 0.0708113515655622, -0.751266816040307]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-0.80835350359544, 0.0, -0.355284934641626]);
+    input.target_position =
+        DataArrayOrVec::Stack([4.40606827118048, -2.84629921001043, -2.91829890043522]);
     input.target_velocity = DataArrayOrVec::Stack([0.555084596169823, 0.0, -1.24631524923535]);
     input.target_acceleration = DataArrayOrVec::Stack([0.463000173872542, 0.0, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([7.97399137456765, 2.68591430972239, 9.54987666746364]);
-    input.max_acceleration = DataArrayOrVec::Stack([5.44679859206862, 7.61752909348119, 0.473482772614085]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([7.97399137456765, 2.68591430972239, 9.54987666746364]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([5.44679859206862, 7.61752909348119, 0.473482772614085]);
     input.max_jerk = DataArrayOrVec::Stack([
         7.88958080921515,
         5.26855927512131,
@@ -169,14 +187,21 @@ fn test_known_trajectory() {
     input.max_jerk = DataArrayOrVec::Stack([2.516849090900998 - 3e-15, 1.0, 1.0]);
     check_duration(&mut otg, &input, 38.3409477609);
 
-    input.current_position = DataArrayOrVec::Stack([-4.180150148354134, 1.030371049895473, -2.660154279239869]);
-    input.current_velocity = DataArrayOrVec::Stack([1.673805463302308, -1.435796222257198, 0.9711306630275642]);
-    input.current_acceleration = DataArrayOrVec::Stack([1.412175048500792, 1.892262449040863, -1.128847905860926]);
-    input.target_position = DataArrayOrVec::Stack([2.079913937916431, 1.839862681333277, 2.341421542126605]);
+    input.current_position =
+        DataArrayOrVec::Stack([-4.180150148354134, 1.030371049895473, -2.660154279239869]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([1.673805463302308, -1.435796222257198, 0.9711306630275642]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([1.412175048500792, 1.892262449040863, -1.128847905860926]);
+    input.target_position =
+        DataArrayOrVec::Stack([2.079913937916431, 1.839862681333277, 2.341421542126605]);
     input.target_velocity = DataArrayOrVec::Stack([0.7537566830764975, 0.0, 0.02507782261105568]);
-    input.target_acceleration = DataArrayOrVec::Stack([-0.8610296259045267, -0.07876324073516261, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([1.863775561344568, 0.4357836109021987, 6.260907804906162]);
-    input.max_acceleration = DataArrayOrVec::Stack([9.49223908896113, 9.002562577262177, 1.119142029086944]);
+    input.target_acceleration =
+        DataArrayOrVec::Stack([-0.8610296259045267, -0.07876324073516261, 0.0]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([1.863775561344568, 0.4357836109021987, 6.260907804906162]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([9.49223908896113, 9.002562577262177, 1.119142029086944]);
     input.max_jerk = DataArrayOrVec::Stack([
         8.689575453772798,
         0.09322235504216797,
@@ -184,20 +209,29 @@ fn test_known_trajectory() {
     ]);
     check_duration(&mut otg, &input, 1135.0135089249);
 
-    input.current_position = DataArrayOrVec::Stack([-4.490717417930574, 3.467236624628543, -0.7545929089757601]);
-    input.current_velocity = DataArrayOrVec::Stack([0.1839756723363622, -0.4356283320280516, 0.7490399525818022]);
-    input.current_acceleration = DataArrayOrVec::Stack([-1.057769973808928, 0.0, -2.368645439140517]);
-    input.target_position = DataArrayOrVec::Stack([-4.928244836531066, -4.821780824003112, -8.20567952461017]);
+    input.current_position =
+        DataArrayOrVec::Stack([-4.490717417930574, 3.467236624628543, -0.7545929089757601]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([0.1839756723363622, -0.4356283320280516, 0.7490399525818022]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-1.057769973808928, 0.0, -2.368645439140517]);
+    input.target_position =
+        DataArrayOrVec::Stack([-4.928244836531066, -4.821780824003112, -8.20567952461017]);
     input.target_velocity = DataArrayOrVec::Stack([0.1097319156272965, -0.9272874846270881, 0.0]);
-    input.target_acceleration = DataArrayOrVec::Stack([0.03089046366221739, -0.9744054582899561, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([6.144314006624488, 2.93258338415229, 0.1820021269527196]);
-    input.max_acceleration = DataArrayOrVec::Stack([5.199401036221791, 1.848176490768948, 11.11168017805234]);
-    input.max_jerk = DataArrayOrVec::Stack([9.940940357283978, 10.46997753899755, 0.08166297169205029]);
+    input.target_acceleration =
+        DataArrayOrVec::Stack([0.03089046366221739, -0.9744054582899561, 0.0]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([6.144314006624488, 2.93258338415229, 0.1820021269527196]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([5.199401036221791, 1.848176490768948, 11.11168017805234]);
+    input.max_jerk =
+        DataArrayOrVec::Stack([9.940940357283978, 10.46997753899755, 0.08166297169205029]);
     check_duration(&mut otg, &input, 7295.4375633935);
 
     input.current_position = DataArrayOrVec::Stack([0.01073568005271233, -0.7002627264230739, 0.0]);
     input.current_velocity = DataArrayOrVec::Stack([0.05656281587106524, 1.011281770884991, 0.0]);
-    input.current_acceleration = DataArrayOrVec::Stack([-5.348847133445708, -3.400994300842285, 0.0]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-5.348847133445708, -3.400994300842285, 0.0]);
     input.target_position = DataArrayOrVec::Stack([0.0698, 0.6283, 0.0]);
     input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
@@ -239,13 +273,15 @@ fn test_known_trajectory() {
     input.max_jerk = DataArrayOrVec::Stack([100.0 + 1e-14, 100.0 + 1e-14, 100.0 + 1e-14]);
     check_full_duration(&mut otg, &mut input, 0.58);
 
-    input.current_position = DataArrayOrVec::Stack([-0.05598571695553641, -0.534847776106059, 0.0978130731424748]);
+    input.current_position =
+        DataArrayOrVec::Stack([-0.05598571695553641, -0.534847776106059, 0.0978130731424748]);
     input.current_velocity = DataArrayOrVec::Stack([
         -0.03425673149926184,
         -0.8169926404190487,
         -0.004506245841081729,
     ]);
-    input.current_acceleration = DataArrayOrVec::Stack([-2.720000000000001, 1.440254448401435, 0.0]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-2.720000000000001, 1.440254448401435, 0.0]);
     input.target_position = DataArrayOrVec::Stack([
         -0.0534691276550293,
         -0.6224863891601563,
@@ -253,9 +289,11 @@ fn test_known_trajectory() {
     ]);
     input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([0.8500000000000001, 0.8500000000000001, 0.8500000000000001]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([0.8500000000000001, 0.8500000000000001, 0.8500000000000001]);
     input.max_acceleration = DataArrayOrVec::Stack([4.25, 4.25, 4.25]);
-    input.max_jerk = DataArrayOrVec::Stack([85.00000000000001, 85.00000000000001, 85.00000000000001]);
+    input.max_jerk =
+        DataArrayOrVec::Stack([85.00000000000001, 85.00000000000001, 85.00000000000001]);
     check_full_duration(&mut otg, &mut input, 0.2281604414);
 
     input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.3736320740840176]);
@@ -328,14 +366,17 @@ fn test_known_trajectory() {
     input.target_position = DataArrayOrVec::Stack([1e-4, 0.0, 0.0]);
     check_full_duration(&mut otg, &mut input, 4.0);
 
-    input.current_position = DataArrayOrVec::Stack([0.2473592757796861, 0.2921606775204735, 0.7758663276711127]);
+    input.current_position =
+        DataArrayOrVec::Stack([0.2473592757796861, 0.2921606775204735, 0.7758663276711127]);
     input.current_velocity = DataArrayOrVec::Stack([
         -0.2426115138900957,
         0.2200706500820608,
         -0.01891492763905089,
     ]);
-    input.current_acceleration = DataArrayOrVec::Stack([0.01877538437863763, -0.6573642866096158, 0.5]);
-    input.target_position = DataArrayOrVec::Stack([0.2308075286416321, 0.3066442218484541, 0.7733155040940536]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([0.01877538437863763, -0.6573642866096158, 0.5]);
+    input.target_position =
+        DataArrayOrVec::Stack([0.2308075286416321, 0.3066442218484541, 0.7733155040940536]);
     input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.max_velocity = DataArrayOrVec::Stack([0.25, 0.25, 0.25]);
@@ -347,19 +388,24 @@ fn test_known_trajectory() {
     input.duration_discretization = DurationDiscretization::Discrete;
     check_full_duration(&mut otg, &mut input, 0.14);
 
-    input.current_position = DataArrayOrVec::Stack([0.5289912019692077, -0.2461593579591288, -0.2728396804501142]);
+    input.current_position =
+        DataArrayOrVec::Stack([0.5289912019692077, -0.2461593579591288, -0.2728396804501142]);
     input.current_velocity = DataArrayOrVec::Stack([
         0.0287779218983349,
         -0.005980397028399779,
         0.04763314105835294,
     ]);
-    input.current_acceleration = DataArrayOrVec::Stack([-1.374657509445135, 0.2564786317266955, -2.497210506808601]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-1.374657509445135, 0.2564786317266955, -2.497210506808601]);
     input.target_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
-    input.max_velocity = DataArrayOrVec::Stack([6.457718232379019, 5.410520681182422, 7.155849933176751]);
-    input.max_acceleration = DataArrayOrVec::Stack([26.89552377323262, 22.5322006432468, 29.81022362406315]);
-    input.max_jerk = DataArrayOrVec::Stack([224.2224490037115, 187.8497873921497, 248.4650723139127]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([6.457718232379019, 5.410520681182422, 7.155849933176751]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([26.89552377323262, 22.5322006432468, 29.81022362406315]);
+    input.max_jerk =
+        DataArrayOrVec::Stack([224.2224490037115, 187.8497873921497, 248.4650723139127]);
     input.min_velocity = None;
     input.min_acceleration = None;
     input.minimum_duration = None;
@@ -368,8 +414,10 @@ fn test_known_trajectory() {
     check_full_duration(&mut otg, &mut input, 0.024);
 
     input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
-    input.current_velocity = DataArrayOrVec::Stack([0.1119477497536703, -0.005706738140158095, 0.0]);
-    input.current_acceleration = DataArrayOrVec::Stack([-2.943871184141059, 0.1638588832925878, 0.0]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([0.1119477497536703, -0.005706738140158095, 0.0]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([-2.943871184141059, 0.1638588832925878, 0.0]);
     input.target_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_velocity = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
     input.target_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
@@ -415,9 +463,12 @@ fn test_known_trajectory() {
         0.014259490365703332,
         -0.012798219033181931,
     ]);
-    input.max_velocity = DataArrayOrVec::Stack([6.4577182323790190, 5.4105206811824216, 7.1558499331767509]);
-    input.max_acceleration = DataArrayOrVec::Stack([26.895523773232618, 22.532200643246796, 29.810223624063148]);
-    input.max_jerk = DataArrayOrVec::Stack([224.22244900371152, 187.84978739214969, 248.46507231391274]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([6.4577182323790190, 5.4105206811824216, 7.1558499331767509]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([26.895523773232618, 22.532200643246796, 29.810223624063148]);
+    input.max_jerk =
+        DataArrayOrVec::Stack([224.22244900371152, 187.84978739214969, 248.46507231391274]);
     input.control_interface = ControlInterface::Velocity;
     check_duration(&mut otg, &input, 0.0187497625);
 
@@ -426,12 +477,18 @@ fn test_known_trajectory() {
         -0.51079124473334669,
         2.4607439315667303,
     ]);
-    input.current_velocity = DataArrayOrVec::Stack([3.4194572623820010, 5.7548168684509085, -1.5675191369761612]);
-    input.current_acceleration = DataArrayOrVec::Stack([27.722541632719086, -1.7945991957745204, -22.971380686605098]);
-    input.target_velocity = DataArrayOrVec::Stack([5.1559110036108979, 5.5636136585722848, -3.6173923596604807]);
-    input.max_velocity = DataArrayOrVec::Stack([9.5993108859688121, 9.4247779607693793, 17.453292519943297]);
-    input.max_acceleration = DataArrayOrVec::Stack([39.985493163190093, 39.618974020271281, 72.710416638083771]);
-    input.max_jerk = DataArrayOrVec::Stack([333.30552725335713, 330.26865435488696, 606.01322287747109]);
+    input.current_velocity =
+        DataArrayOrVec::Stack([3.4194572623820010, 5.7548168684509085, -1.5675191369761612]);
+    input.current_acceleration =
+        DataArrayOrVec::Stack([27.722541632719086, -1.7945991957745204, -22.971380686605098]);
+    input.target_velocity =
+        DataArrayOrVec::Stack([5.1559110036108979, 5.5636136585722848, -3.6173923596604807]);
+    input.max_velocity =
+        DataArrayOrVec::Stack([9.5993108859688121, 9.4247779607693793, 17.453292519943297]);
+    input.max_acceleration =
+        DataArrayOrVec::Stack([39.985493163190093, 39.618974020271281, 72.710416638083771]);
+    input.max_jerk =
+        DataArrayOrVec::Stack([333.30552725335713, 330.26865435488696, 606.01322287747109]);
     input.control_interface = ControlInterface::Velocity;
     check_duration(&mut otg, &input, 0.1030382161);
 
@@ -481,7 +538,7 @@ fn test_known_trajectory() {
     assert_float_eq!(new_position[0], 0.033_333, abs <= 0.000_1);
     assert_float_eq!(new_position[1], 0.000_833, abs <= 0.000_1);
 
-    let mut otg38 = Ruckig::<38, ThrowErrorHandler>::new(None,0.004);
+    let mut otg38 = Ruckig::<38, ThrowErrorHandler>::new(None, 0.004);
     let mut input38 = InputParameter::new(None);
     input38.current_position = DataArrayOrVec::Stack([
         0.5, -0.7, -0.7, -1.5, -0.0, -0.2, 0.5, 0.7, 0.7, -1.5, 0.0, -0.2, -0.0, 0.0, -0.0, 0.0,
@@ -632,7 +689,8 @@ fn test_known_trajectory() {
         0.0,
         0.0,
     ]);
-    input6.current_acceleration = DataArrayOrVec::Stack([0.0, 0.0, 0.0, -0.3999999999978001, 0.0, 0.0]);
+    input6.current_acceleration =
+        DataArrayOrVec::Stack([0.0, 0.0, 0.0, -0.3999999999978001, 0.0, 0.0]);
     input6.target_position = DataArrayOrVec::Stack([
         0.1703441349946466,
         3.587689540855463,

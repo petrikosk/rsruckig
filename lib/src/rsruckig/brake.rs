@@ -1,3 +1,8 @@
+//! Emergency brake profile calculation for trajectory interruption
+//!
+//! This module provides functionality to create and handle emergency brake profiles
+//! for safely stopping motion when a trajectory needs to be interrupted.
+
 use crate::util::integrate;
 use std::f64;
 

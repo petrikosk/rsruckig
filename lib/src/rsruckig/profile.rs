@@ -1,3 +1,8 @@
+//! Motion profiles for trajectory generation with kinematic constraints
+//!
+//! This module defines the motion profiles used for trajectory generation,
+//! which represent mathematically optimal motion under kinematic constraints.
+
 use crate::brake::BrakeProfile;
 use crate::roots;
 use crate::util::integrate;
@@ -51,26 +56,61 @@ pub struct Bound {
 }
 
 /// The state profile for position, velocity, acceleration and jerk for a single DoF
+///
+/// This structure holds the complete kinematic profile for a single degree of freedom.
+/// It includes:
+/// - Time intervals for each trajectory segment
+/// - Jerk, acceleration, velocity, and position profiles
+/// - Target kinematic state
+/// - Information about which limits were reached
+///
+/// The profile consists of up to 7 phases, each with constant jerk, following
+/// a time-optimal bang-bang approach for trajectory generation.
+///
+/// This is a low-level representation used internally by the algorithm, but
+/// exposed for advanced use cases.
 #[derive(Debug, Clone, Default)]
 pub struct Profile {
+    /// Duration of each phase (up to 7 phases)
     pub t: [f64; 7],
+
+    /// Cumulative time at the end of each phase
     pub t_sum: [f64; 7],
+
+    /// Jerk value for each phase
     pub j: [f64; 7],
+
+    /// Acceleration at the start/end of each phase
     pub a: [f64; 8],
+
+    /// Velocity at the start/end of each phase
     pub v: [f64; 8],
+
+    /// Position at the start/end of each phase
     pub p: [f64; 8],
 
-    /// Brake sub-profiles
+    /// Brake sub-profiles for emergency stops
     pub brake: BrakeProfile,
+
+    /// Acceleration sub-profiles
     pub accel: BrakeProfile,
 
-    /// Target (final) kinematic state
+    /// Target final position
     pub pf: f64,
+
+    /// Target final velocity
     pub vf: f64,
+
+    /// Target final acceleration
     pub af: f64,
 
+    /// Information about which kinematic limits were reached
     pub limits: ReachedLimits,
+
+    /// Direction of motion
     pub direction: Direction,
+
+    /// Control sign configuration
     pub control_signs: ControlSigns,
 }
 

@@ -69,13 +69,19 @@ where
     }
 }
 
-fn _check_update<const DOF: usize, E: RuckigErrorHandler>(otg: &mut Ruckig<DOF, E>, input: &InputParameter<DOF>) -> f64 {
+fn _check_update<const DOF: usize, E: RuckigErrorHandler>(
+    otg: &mut Ruckig<DOF, E>,
+    input: &InputParameter<DOF>,
+) -> f64 {
     let mut output = OutputParameter::new(None);
     let _result = otg.update(input, &mut output);
     output.calculation_duration
 }
 
-fn check_calculation<const DOF: usize, E: RuckigErrorHandler>(otg: &mut Ruckig<DOF, E>, input: &InputParameter<DOF>) -> f64 {
+fn check_calculation<const DOF: usize, E: RuckigErrorHandler>(
+    otg: &mut Ruckig<DOF, E>,
+    input: &InputParameter<DOF>,
+) -> f64 {
     let mut traj = Trajectory::new(None);
     let start = Instant::now();
     let _result = otg.calculate(input, &mut traj);
@@ -146,7 +152,7 @@ fn benchmark<const DOF: usize>(
 
             limit_randomizer.fill(&mut input.max_jerk);
 
-            if let Ok(false) = otg.validate_input(&input, false, false) {
+            if otg.validate_input(&input, false, false).is_err() {
                 continue;
             }
 

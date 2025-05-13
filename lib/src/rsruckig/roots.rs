@@ -1,3 +1,8 @@
+//! Root-finding utilities for trajectory calculations
+//!
+//! This module provides functions for finding roots of polynomials,
+//! which is essential for solving the trajectory optimization problems.
+
 use arrayvec::ArrayVec;
 
 const COS_120: f64 = -0.50;

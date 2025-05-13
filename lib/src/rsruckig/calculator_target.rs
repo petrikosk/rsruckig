@@ -496,19 +496,18 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                         == 0.0
                     || inp.max_jerk[dof] == 0.0;
                 if has_zero_limits {
-                    return T::handle_calculator_error(
+                    T::handle_calculator_error(
                         &format!(
                             "zero limits conflict in step 1, dof: {} input: {}",
                             dof, inp
                         )
-                        .to_owned(),
-                        RuckigResult::ErrorZeroLimits,
-                    );
+                    )?;
+                    return Ok(RuckigResult::ErrorZeroLimits);
                 }
-                return T::handle_calculator_error(
-                    &format!("error in step 1, dof: {} input: {}", dof, inp).to_owned(),
-                    RuckigResult::ErrorExecutionTimeCalculation,
-                );
+                T::handle_calculator_error(
+                    &format!("error in step 1, dof: {} input: {}", dof, inp)
+                )?;
+                return Ok(RuckigResult::ErrorExecutionTimeCalculation);
             }
 
             traj.independent_min_durations[dof] = self.blocks[dof].t_min;
@@ -547,14 +546,15 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             }
 
             if has_zero_limits {
-                return T::handle_calculator_error(
-                    &format!("zero limits conflict with other degrees of freedom in time synchronization {}", traj.duration),
-                    RuckigResult::ErrorZeroLimits);
+                T::handle_calculator_error(
+                    &format!("zero limits conflict with other degrees of freedom in time synchronization {}", traj.duration)
+                )?;
+                return Ok(RuckigResult::ErrorZeroLimits);
             }
-            return T::handle_calculator_error(
-                &format!("error in time synchronization: {}", traj.duration),
-                RuckigResult::ErrorSynchronizationCalculation,
-            );
+            T::handle_calculator_error(
+                &format!("error in time synchronization: {}", traj.duration)
+            )?;
+            return Ok(RuckigResult::ErrorSynchronizationCalculation);
         }
         // None Synchronization
         for dof in 0..self.degrees_of_freedom {
@@ -857,13 +857,12 @@ impl<const DOF: usize> TargetCalculator<DOF> {
             }
 
             if !found_time_synchronization {
-                return T::handle_calculator_error(
+                T::handle_calculator_error(
                     &format!(
-                        "error in step 2 in dof: {} for t sync: {} input: {}",
-                        dof, traj.duration, inp
-                    ),
-                    RuckigResult::ErrorExecutionTimeCalculation,
-                );
+                        "error in step 2, dof: {} input: {}", dof, inp
+                    )
+                )?;
+                return Ok(RuckigResult::ErrorExecutionTimeCalculation);
             }
 
             // Uncomment the following line if you want to debug

@@ -1,3 +1,8 @@
+//! Utility functions and data structures for the Ruckig algorithm
+//!
+//! This module provides helper functions, common data structures,
+//! and macros used throughout the Ruckig implementation.
+
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 pub fn join<const DOF: usize>(numbers: &[f64], high_precision: bool) -> String {
@@ -26,16 +31,66 @@ pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
 }
 
 // A utility enum to store either an array or a vector
+/// A container that can store data either on the stack or the heap
+///
+/// This enum provides a unified interface for working with data stored either:
+/// - On the stack with a fixed size (when N > 0)
+/// - On the heap with a dynamic size (when N = 0)
+///
+/// This is a key component of rsruckig's flexible memory management, allowing
+/// users to choose between compile-time (stack) or runtime (heap) allocation
+/// for their degrees of freedom data.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the elements
+/// * `N` - The size for stack allocation. If 0, heap allocation is used.
+///
+/// # Examples
+///
+/// Stack allocation (fixed size at compile time):
+/// ```no_run
+/// use rsruckig::prelude::*;
+///
+/// // Using the daov_stack! macro for stack allocation
+/// let data: DataArrayOrVec<f64, 3> = daov_stack![0.0, 1.0, 2.0];
+/// assert_eq!(data[1], 1.0);
+/// ```
+///
+/// Heap allocation (dynamic size at runtime):
+/// ```no_run
+/// use rsruckig::prelude::*;
+///
+/// // Using the daov_heap! macro for heap allocation
+/// let data: DataArrayOrVec<f64, 3> = daov_heap![0.0, 1.0, 2.0];
+/// assert_eq!(data[1], 1.0);
+/// ```
 #[derive(Debug)]
 pub enum DataArrayOrVec<T, const N: usize>
 where
     T: std::fmt::Debug,
 {
+    /// Stack allocation with fixed size array
     Stack([T; N]),
+    /// Heap allocation with dynamic vector
     Heap(Vec<T>),
 }
 
 impl<T: Default + Clone + std::fmt::Debug, const N: usize> DataArrayOrVec<T, N> {
+    /// Create a new DataArrayOrVec with the specified number of elements
+    ///
+    /// This constructor chooses stack or heap allocation based on the template parameter N:
+    /// - If N > 0, creates a stack-allocated array of size N, ignoring the dofs parameter
+    /// - If N = 0, creates a heap-allocated vector with size specified by dofs
+    ///
+    /// # Arguments
+    ///
+    /// * `dofs` - The number of degrees of freedom (only used for heap allocation)
+    /// * `initial` - The initial value to fill the container with
+    ///
+    /// # Returns
+    ///
+    /// A new DataArrayOrVec instance with all elements set to the initial value
     pub fn new(dofs: Option<usize>, initial: T) -> Self {
         let size = dofs.unwrap_or(1);
         if N > 0 {
@@ -135,32 +190,93 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArra
     }
 }
 
+/// Creates a stack-allocated `DataArrayOrVec` instance with fixed-size array storage.
+///
+/// This macro simplifies the creation of stack-allocated vectors for kinematic data.
+/// It uses the `DataArrayOrVec::Stack` variant internally, which stores data in a fixed-size array.
+/// 
+/// # Examples
+///
+/// ```
+/// use rsruckig::prelude::*;
+/// 
+/// // Create a stack-allocated array with 3 elements
+/// let positions = daov_stack![0.0, 1.0, 2.0];
+///
+/// // Access elements via indexing
+/// assert_eq!(positions[0], 0.0);
+/// assert_eq!(positions[1], 1.0);
+/// assert_eq!(positions[2], 2.0);
+/// ```
+///
+/// You can also create an array with repeated values:
+///
+/// ```
+/// use rsruckig::prelude::*;
+/// 
+/// // Create a stack-allocated array with 5 zeros
+/// let zeros = daov_stack![0.0; 5];
+///
+/// assert_eq!(zeros[0], 0.0);
+/// assert_eq!(zeros[4], 0.0);
+/// ```
 #[macro_export]
 macro_rules! daov_stack {
     ($($x:expr),+ $(,)?) => {
         {
             let temp: [_; $crate::count_exprs!($($x),*)] = [$($x),*];
-            $crate::util::DataArrayOrVec::Stack(temp)
+            $crate::rsruckig::util::DataArrayOrVec::Stack(temp)
         }
     };
     ($x:expr; $n:expr) => {
         {
-            $crate::util::DataArrayOrVec::Stack([$x; $n])
+            $crate::rsruckig::util::DataArrayOrVec::Stack([$x; $n])
         }
     };
 }
 
+/// Creates a heap-allocated `DataArrayOrVec` instance with dynamic Vec storage.
+///
+/// This macro simplifies the creation of heap-allocated vectors for kinematic data.
+/// It uses the `DataArrayOrVec::Heap` variant internally, which stores data in a Vec.
+/// This is particularly useful when the number of degrees of freedom is only known at runtime.
+/// 
+/// # Examples
+///
+/// ```
+/// use rsruckig::prelude::*;
+/// 
+/// // Create a heap-allocated vector with 3 elements
+/// let velocities = daov_heap![0.0, 1.0, 2.0];
+///
+/// // Access elements via indexing
+/// assert_eq!(velocities[0], 0.0);
+/// assert_eq!(velocities[1], 1.0);
+/// assert_eq!(velocities[2], 2.0);
+/// ```
+///
+/// You can also create a vector with repeated values:
+///
+/// ```
+/// use rsruckig::prelude::*;
+/// 
+/// // Create a heap-allocated vector with 5 zeros
+/// let zeros = daov_heap![0.0; 5];
+///
+/// assert_eq!(zeros[0], 0.0);
+/// assert_eq!(zeros[4], 0.0);
+/// ```
 #[macro_export]
 macro_rules! daov_heap {
     ($($x:expr),+ $(,)?) => {
         {
             let temp: [_; $crate::count_exprs!($($x),*)] = [$($x),*];
-            $crate::util::DataArrayOrVec::Heap(temp.into())
+            $crate::rsruckig::util::DataArrayOrVec::Heap(temp.into())
         }
     };
     ($x:expr; $n:expr) => {
         {
-            $crate::util::DataArrayOrVec::Heap(vec![$x; $n])
+            $crate::rsruckig::util::DataArrayOrVec::Heap(vec![$x; $n])
         }
     };
 }

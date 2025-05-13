@@ -1,3 +1,8 @@
+//! Trajectory representation and evaluation
+//!
+//! This module provides the core trajectory type that represents a complete
+//! time-parameterized path with position, velocity, and acceleration profiles.
+
 use crate::profile::Bound;
 use crate::profile::Profile;
 use crate::util::{integrate, DataArrayOrVec};

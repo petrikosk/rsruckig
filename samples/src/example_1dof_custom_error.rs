@@ -10,20 +10,13 @@ use rsruckig::prelude::*;
 pub struct LogErrorHandler;
 
 impl RuckigErrorHandler for LogErrorHandler {
-    fn handle_validation_error(message: &str) -> Result<bool, RuckigError> {
+    fn handle_validation_error(message: &str) -> Result<(), RuckigError> {
         error!("{}", message);
-        Ok(false)
-        // Or if you want to throw an error:
-        // Err(RuckigError::new(message.to_string()))
+        Ok(())
     }
-    fn handle_calculator_error(
-        message: &str,
-        result: RuckigResult,
-    ) -> Result<RuckigResult, RuckigError> {
-        error!("{}: Result: {:?}", message, result);
-        Ok(result)
-        // Or if you want to throw an error:
-        // Err(RuckigError::new(format!("{}: {:?}", message, result)))
+    fn handle_calculator_error(message: &str) -> Result<(), RuckigError> {
+        error!("{}", message);
+        Ok(())
     }
 }
 

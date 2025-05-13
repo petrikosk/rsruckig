@@ -1,53 +1,187 @@
+//! Input parameters for trajectory generation, including constraints and settings
+//!
+//! This module defines the parameters for trajectory generation, including the current state,
+//! target state, and kinematic constraints like velocity, acceleration, and jerk limits.
+//! It also provides options for customizing the generation process.
+
 use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::util::{join, DataArrayOrVec};
 use std::fmt;
 use std::ops::Deref;
 
+/// Control interface for trajectory generation
+///
+/// Specifies which kinematic level is being controlled directly:
+/// - Position: Full position, velocity, and acceleration control (default)
+/// - Velocity: Direct velocity control (useful for visual servoing and stop motions)
+/// - Acceleration: Direct acceleration control
+///
+/// # Example
+///
+/// ```
+/// use rsruckig::prelude::*;
+///
+/// let mut input = InputParameter::<1>::new(None);
+///
+/// // For position control (default)
+/// input.control_interface = ControlInterface::Position;
+///
+/// // For velocity control (e.g., for visual servoing)
+/// input.control_interface = ControlInterface::Velocity;
+/// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum ControlInterface {
+    /// Full kinematic state control (position, velocity, acceleration)
     #[default]
     Position,
+
+    /// Direct velocity control (useful for visual servoing, stop trajectories)
     Velocity,
+
+    /// Direct acceleration control
     Acceleration,
 }
 
+/// Synchronization behavior for multi-DoF trajectories
+///
+/// Controls how multiple degrees of freedom are synchronized during trajectory generation:
+/// - Time: All DoFs reach the target at the same time (default)
+/// - TimeIfNecessary: Only synchronize if required by other constraints
+/// - Phase: All DoFs follow the same phase profile (results in straight-line motions)
+/// - None: Each DoF follows its own independent time-optimal profile
+///
+/// # Example
+///
+/// ```
+/// use rsruckig::prelude::*;
+///
+/// let mut input = InputParameter::<3>::new(None);
+///
+/// // For time synchronization (default)
+/// input.synchronization = Synchronization::Time;
+///
+/// // For straight-line motions
+/// input.synchronization = Synchronization::Phase;
+///
+/// // For independent, time-optimal profiles for each DoF
+/// input.synchronization = Synchronization::None;
+/// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Synchronization {
+    /// All DoFs reach their target at the same time (default)
     #[default]
     Time,
+
+    /// Only synchronize DoFs if required by other constraints
     TimeIfNecessary,
+
+    /// All DoFs follow the same phase profile (results in straight-line motions)
     Phase,
+
+    /// Each DoF follows its own time-optimal profile independently
     None,
 }
 
+/// Duration discretization mode for trajectory timing
+///
+/// Controls whether the trajectory duration should be:
+/// - Continuous: Any duration is allowed (default)
+/// - Discrete: Duration must be a multiple of the control cycle
+///
+/// The discrete option ensures that the exact target state can be reached
+/// precisely at a control cycle execution.
+///
+/// # Example
+///
+/// ```
+/// use rsruckig::prelude::*;
+///
+/// let mut input = InputParameter::<1>::new(None);
+///
+/// // Allow any trajectory duration (default)
+/// input.duration_discretization = DurationDiscretization::Continuous;
+///
+/// // Force duration to be a multiple of the control cycle
+/// input.duration_discretization = DurationDiscretization::Discrete;
+/// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum DurationDiscretization {
+    /// Any trajectory duration is allowed (default)
     #[default]
     Continuous,
+
+    /// Trajectory duration must be a multiple of the control cycle
     Discrete,
 }
 
+/// Input parameters for trajectory generation
+///
+/// This structure contains all the parameters needed for trajectory generation:
+/// - Current kinematic state (position, velocity, acceleration)
+/// - Target kinematic state
+/// - Kinematic limits (velocity, acceleration, jerk)
+/// - Control settings (interface type, synchronization, etc.)
+///
+/// # Type Parameters
+///
+/// * `DOF` - Number of degrees of freedom. Use a specific number for stack allocation or 0 for heap allocation.
+///
+/// # Example
+///
+/// ```
+/// use rsruckig::prelude::*;
+///
+/// // Stack allocation (3 DoF)
+/// let mut input = InputParameter::<3>::new(None);
+/// input.current_position = daov_stack![0.0, 0.0, 0.0];
+/// input.target_position = daov_stack![1.0, 2.0, 3.0];
+///
+/// // Heap allocation (dynamic DoF)
+/// let mut input = InputParameter::<0>::new(Some(3));
+/// input.current_position = daov_heap![0.0, 0.0, 0.0];
+/// input.target_position = daov_heap![1.0, 2.0, 3.0];
+/// ```
 #[derive(Debug, Clone)]
 pub struct InputParameter<const DOF: usize> {
+    /// Number of degrees of freedom
     pub degrees_of_freedom: usize,
+    /// Control interface type (Position, Velocity, or Acceleration)
     pub control_interface: ControlInterface,
+    /// Synchronization behavior between multiple DoFs
     pub synchronization: Synchronization,
+    /// Whether the duration should be a discrete multiple of the control cycle
     pub duration_discretization: DurationDiscretization,
+    /// Current position for each DoF
     pub current_position: DataArrayOrVec<f64, DOF>,
+    /// Current velocity for each DoF
     pub current_velocity: DataArrayOrVec<f64, DOF>,
+    /// Current acceleration for each DoF
     pub current_acceleration: DataArrayOrVec<f64, DOF>,
+    /// Target position for each DoF
     pub target_position: DataArrayOrVec<f64, DOF>,
+    /// Target velocity for each DoF
     pub target_velocity: DataArrayOrVec<f64, DOF>,
+    /// Target acceleration for each DoF
     pub target_acceleration: DataArrayOrVec<f64, DOF>,
+    /// Maximum velocity limit for each DoF
     pub max_velocity: DataArrayOrVec<f64, DOF>,
+    /// Maximum acceleration limit for each DoF
     pub max_acceleration: DataArrayOrVec<f64, DOF>,
+    /// Maximum jerk limit for each DoF
     pub max_jerk: DataArrayOrVec<f64, DOF>,
+    /// Minimum velocity limit for each DoF (negative values). If None, negative of max_velocity is used.
     pub min_velocity: Option<DataArrayOrVec<f64, DOF>>,
+    /// Minimum acceleration limit for each DoF (negative values). If None, negative of max_acceleration is used.
     pub min_acceleration: Option<DataArrayOrVec<f64, DOF>>,
+    /// Whether each DoF is enabled in the calculation
     pub enabled: DataArrayOrVec<bool, DOF>,
+    /// Sets the control interface for each DoF individually, overwrites global control_interface
     pub per_dof_control_interface: Option<DataArrayOrVec<ControlInterface, DOF>>,
+    /// Sets the synchronization for each DoF individually, overwrites global synchronization
     pub per_dof_synchronization: Option<DataArrayOrVec<Synchronization, DOF>>,
+    /// Optional minimum duration of the trajectory
     pub minimum_duration: Option<f64>,
+    /// Optional duration after which calculation should be interrupted (for real-time guarantees)
     pub interrupt_calculation_duration: Option<f64>,
 }
 
@@ -116,7 +250,7 @@ impl<const DOF: usize> InputParameter<DOF> {
         &self,
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
-    ) -> Result<bool, RuckigError> {
+    ) -> Result<(), RuckigError> {
         for dof in 0..self.degrees_of_freedom {
             let j_max = self.max_jerk[dof];
             if j_max.is_nan() || j_max < 0.0 {
@@ -280,7 +414,7 @@ impl<const DOF: usize> InputParameter<DOF> {
                 }
             }
         }
-        Ok(true)
+        Ok(())
     }
 }
 

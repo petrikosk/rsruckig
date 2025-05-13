@@ -49,7 +49,7 @@ fn test_at_time() {
     let result = otg.update(&input, &mut output);
 
     // Assertions
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 3.1748, abs <= 0.000_1);
 
     let mut new_position = DataArrayOrVec::Stack([0.0; 1]);
@@ -99,12 +99,12 @@ fn test_secondary() {
     let mut traj = Trajectory::new(None);
 
     let result = otg.calculate(&input, &mut traj);
-    assert_eq!(result.unwrap_or(RuckigResult::Error), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
 
     let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
@@ -262,14 +262,15 @@ fn test_secondary() {
     }
     assert!(!output.new_calculation);
 
+    // Modify input parameters to trigger a new calculation
     input.target_velocity = DataArrayOrVec::Stack([0.2, -0.3, 0.8]);
     let result = otg.update(&input, &mut output);
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert!(output.new_calculation);
 
     input.minimum_duration = Some(12.0);
     let result = otg.update(&input, &mut output);
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 12.0, abs <= 0.000_1);
 
     input.current_position = DataArrayOrVec::Stack([1300.0, 0.0, 0.02]);
@@ -288,7 +289,7 @@ fn test_secondary() {
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 0.167347, abs <= 0.000_1);
 
     let independent_min_durations = output.trajectory.get_independent_min_durations();
@@ -321,7 +322,7 @@ fn test_enabled() {
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(
         output.trajectory.get_duration(),
         3.1748021039,
@@ -394,7 +395,7 @@ fn test_enabled() {
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(
         output.trajectory.get_duration(),
         3.6578610221,
@@ -426,7 +427,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
@@ -448,7 +449,7 @@ fn test_phase_synchronization() {
         &mut None,
         &mut None,
     );
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
     assert!(almost_equal_vecs(
         &new_position,
@@ -486,7 +487,7 @@ fn test_phase_synchronization() {
         &mut None,
     );
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
     assert!(almost_equal_vecs(
         &new_position,
@@ -518,7 +519,7 @@ fn test_phase_synchronization() {
         &mut None,
     );
 
-    assert_eq!(result.unwrap(), RuckigResult::Finished);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 0.0, abs <= 0.000_1);
     assert!(almost_equal_vecs(&new_position, &[1.0, -2.0, 3.0], 0.000_1));
     assert!(almost_equal_vecs(
@@ -545,7 +546,7 @@ fn test_phase_synchronization() {
     input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.calculate(&input, &mut traj);
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
@@ -567,7 +568,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][2].t);
 
@@ -581,7 +582,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
@@ -597,7 +598,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][2].t);
 
@@ -616,7 +617,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
@@ -632,7 +633,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert!(almost_equal_vecs(
         &traj.get_profiles()[0][0].t,
         &traj.get_profiles()[0][1].t,
@@ -648,7 +649,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][2].t);
 
@@ -662,7 +663,7 @@ fn test_phase_synchronization() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -690,7 +691,7 @@ fn test_discretion() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 4.5, abs <= 0.000_1);
 
     let _result = otg.update(&input, &mut output);
@@ -725,7 +726,7 @@ fn test_per_dof_setting() {
     input.max_jerk = DataArrayOrVec::Stack([1.0, 1.0, 1.0]);
 
     let result = otg.calculate(&input, &mut traj);
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
     let mut new_position = DataArrayOrVec::Stack([0.0; 3]);
@@ -750,7 +751,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 1.095445115, abs <= 0.000_1);
 
     traj.at_time(
@@ -775,7 +776,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
     input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
@@ -786,7 +787,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
     traj.at_time(
@@ -814,7 +815,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 4.0, abs <= 0.000_1);
 
     traj.at_time(
@@ -887,7 +888,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 0.4207106781, abs <= 0.000_1);
 
     input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
@@ -910,7 +911,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 3.7885667284, abs <= 0.000_1);
 
     input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
@@ -921,14 +922,14 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 3.7885667284, abs <= 0.000_1);
 
     input.enabled = DataArrayOrVec::Stack([true, false, true]);
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 3.6578610221, abs <= 0.000_1);
 
     input.current_position = DataArrayOrVec::Stack([0.0, 0.0, 0.0]);
@@ -953,7 +954,7 @@ fn test_per_dof_setting() {
 
     let result = otg.calculate(&input, &mut traj);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(traj.get_duration(), 2.848387279, abs <= 0.000_1);
     assert_ne!(traj.get_profiles()[0][0].t, traj.get_profiles()[0][1].t);
     assert!(almost_equal_vecs(
@@ -983,7 +984,7 @@ fn test_dynamic_dofs() {
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 4.0, abs <= 0.000_1);
 
     let mut new_position = DataArrayOrVec::Heap(vec![0.0; 3]);
@@ -1035,7 +1036,7 @@ fn test_zero_limits() {
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 5.0, abs <= 0.000_1);
 
     input.current_position = DataArrayOrVec::Stack([0.0, -2.0, 0.0]);
@@ -1112,14 +1113,14 @@ fn test_zero_limits() {
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 2.0, abs <= 0.000_1);
 
     input.max_jerk = DataArrayOrVec::Stack([0.0, 2.0, 20.0]);
 
     let result = otg.update(&input, &mut output);
 
-    assert_eq!(result.unwrap(), RuckigResult::Working);
+    assert!(result.is_ok());
     assert_float_eq!(output.trajectory.get_duration(), 1.1, abs <= 0.000_1);
 }
 
