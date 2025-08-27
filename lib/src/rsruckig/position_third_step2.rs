@@ -6,6 +6,8 @@ use crate::{
     roots::*,
 };
 
+use num_traits::Float;
+
 pub struct PositionThirdOrderStep2 {
     v0: f64,
     a0: f64,

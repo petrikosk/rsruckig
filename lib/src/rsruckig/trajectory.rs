@@ -7,6 +7,8 @@ use crate::profile::Bound;
 use crate::profile::Profile;
 use crate::util::{integrate, DataArrayOrVec};
 
+use crate::alloc::{vec, vec::Vec};
+
 // We'll use Vec<T> instead of CustomVector<T, DOF>
 #[derive(Debug, Clone)]
 pub struct Trajectory<const DOF: usize> {

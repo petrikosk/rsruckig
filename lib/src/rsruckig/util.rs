@@ -3,7 +3,9 @@
 //! This module provides helper functions, common data structures,
 //! and macros used throughout the Ruckig implementation.
 
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use core::ops::{Deref, DerefMut, Index, IndexMut};
+
+use crate::alloc::{vec, vec::Vec, boxed::Box, format, string::{String, ToString}};
 
 pub fn join<const DOF: usize>(numbers: &[f64], high_precision: bool) -> String {
     if high_precision {
@@ -68,7 +70,7 @@ pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
 #[derive(Debug)]
 pub enum DataArrayOrVec<T, const N: usize>
 where
-    T: std::fmt::Debug,
+    T: core::fmt::Debug,
 {
     /// Stack allocation with fixed size array
     Stack([T; N]),
@@ -76,7 +78,7 @@ where
     Heap(Vec<T>),
 }
 
-impl<T: Default + Clone + std::fmt::Debug, const N: usize> DataArrayOrVec<T, N> {
+impl<T: Default + Clone + core::fmt::Debug, const N: usize> DataArrayOrVec<T, N> {
     /// Create a new DataArrayOrVec with the specified number of elements
     ///
     /// This constructor chooses stack or heap allocation based on the template parameter N:
@@ -94,7 +96,7 @@ impl<T: Default + Clone + std::fmt::Debug, const N: usize> DataArrayOrVec<T, N> 
     pub fn new(dofs: Option<usize>, initial: T) -> Self {
         let size = dofs.unwrap_or(1);
         if N > 0 {
-            let arr: [T; N] = std::array::from_fn(|_| initial.clone());
+            let arr: [T; N] = core::array::from_fn(|_| initial.clone());
             DataArrayOrVec::Stack(arr)
         } else {
             DataArrayOrVec::Heap(vec![initial; size])
@@ -123,7 +125,7 @@ impl<T: Default + Clone + std::fmt::Debug, const N: usize> DataArrayOrVec<T, N> 
     }
 }
 
-impl<T: PartialEq + std::fmt::Debug, const N: usize> PartialEq for DataArrayOrVec<T, N> {
+impl<T: PartialEq + core::fmt::Debug, const N: usize> PartialEq for DataArrayOrVec<T, N> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (DataArrayOrVec::Stack(a), DataArrayOrVec::Stack(b)) => a == b,
@@ -133,13 +135,13 @@ impl<T: PartialEq + std::fmt::Debug, const N: usize> PartialEq for DataArrayOrVe
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> Default for DataArrayOrVec<T, N> {
+impl<T: Clone + Default + core::fmt::Debug, const N: usize> Default for DataArrayOrVec<T, N> {
     fn default() -> Self {
         DataArrayOrVec::Heap(Vec::new())
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> Index<usize> for DataArrayOrVec<T, N> {
+impl<T: Clone + Default + core::fmt::Debug, const N: usize> Index<usize> for DataArrayOrVec<T, N> {
     type Output = T;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -150,7 +152,7 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> Index<usize> for Data
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> IndexMut<usize>
+impl<T: Clone + Default + core::fmt::Debug, const N: usize> IndexMut<usize>
     for DataArrayOrVec<T, N>
 {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
@@ -161,7 +163,7 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> IndexMut<usize>
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> Clone for DataArrayOrVec<T, N> {
+impl<T: Clone + Default + core::fmt::Debug, const N: usize> Clone for DataArrayOrVec<T, N> {
     fn clone(&self) -> Self {
         match self {
             DataArrayOrVec::Heap(vec) => DataArrayOrVec::Heap(vec.clone()),
@@ -170,7 +172,7 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> Clone for DataArrayOr
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> Deref for DataArrayOrVec<T, N> {
+impl<T: Clone + Default + core::fmt::Debug, const N: usize> Deref for DataArrayOrVec<T, N> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
@@ -181,7 +183,7 @@ impl<T: Clone + Default + std::fmt::Debug, const N: usize> Deref for DataArrayOr
     }
 }
 
-impl<T: Clone + Default + std::fmt::Debug, const N: usize> DerefMut for DataArrayOrVec<T, N> {
+impl<T: Clone + Default + core::fmt::Debug, const N: usize> DerefMut for DataArrayOrVec<T, N> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             DataArrayOrVec::Heap(vec) => vec,
@@ -203,12 +205,12 @@ macro_rules! count_exprs {
 ///
 /// This macro simplifies the creation of stack-allocated vectors for kinematic data.
 /// It uses the `DataArrayOrVec::Stack` variant internally, which stores data in a fixed-size array.
-/// 
+///
 /// # Examples
 ///
 /// ```
 /// use rsruckig::prelude::*;
-/// 
+///
 /// // Create a stack-allocated array with 3 elements
 /// let positions: DataArrayOrVec<f64, 3> = daov_stack![0.0, 1.0, 2.0];
 ///
@@ -222,7 +224,7 @@ macro_rules! count_exprs {
 ///
 /// ```
 /// use rsruckig::prelude::*;
-/// 
+///
 /// // Create a stack-allocated array with 5 zeros
 /// let zeros: DataArrayOrVec<f64, 5> = daov_stack![0.0; 5];
 ///
@@ -249,12 +251,12 @@ macro_rules! daov_stack {
 /// This macro simplifies the creation of heap-allocated vectors for kinematic data.
 /// It uses the `DataArrayOrVec::Heap` variant internally, which stores data in a Vec.
 /// This is particularly useful when the number of degrees of freedom is only known at runtime.
-/// 
+///
 /// # Examples
 ///
 /// ```
 /// use rsruckig::prelude::*;
-/// 
+///
 /// // Create a heap-allocated vector with 3 elements
 /// let velocities: DataArrayOrVec<f64, 3> = daov_heap![0.0, 1.0, 2.0];
 ///
@@ -268,7 +270,7 @@ macro_rules! daov_stack {
 ///
 /// ```
 /// use rsruckig::prelude::*;
-/// 
+///
 /// // Create a heap-allocated vector with 5 zeros
 /// let zeros: DataArrayOrVec<f64, 5> = daov_heap![0.0; 5];
 ///

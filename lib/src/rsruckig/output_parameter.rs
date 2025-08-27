@@ -3,8 +3,8 @@
 //! This module provides structures to hold the results of trajectory generation,
 //! including the full trajectory and the current kinematic state.
 
-use std::fmt;
-use std::ops::Deref;
+use core::fmt;
+use core::ops::Deref;
 
 use crate::input_parameter::InputParameter;
 use crate::trajectory::Trajectory;
@@ -97,11 +97,11 @@ impl<const DOF: usize> OutputParameter<DOF> {
     ///
     /// ```ignore
     /// use rsruckig::prelude::*;
-    /// 
+    ///
     /// // Assume otg, input, and output are properly initialized
     /// while otg.update(&input, &mut output).unwrap() == RuckigResult::Working {
     ///     // Use output.new_position, output.new_velocity, etc.
-    ///     
+    ///
     ///     // Prepare for the next iteration
     ///     output.pass_to_input(&mut input);
     /// }

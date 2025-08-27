@@ -6,7 +6,9 @@
 use crate::brake::BrakeProfile;
 use crate::roots;
 use crate::util::integrate;
-use std::fmt;
+use core::fmt;
+
+use num_traits::Float;
 
 static V_EPS: f64 = 1e-12;
 static A_EPS: f64 = 1e-12;
@@ -136,7 +138,7 @@ impl Profile {
             self.t_sum[i + 1] = self.t_sum[i] + self.t[i + 1];
         }
 
-        if (limits == ReachedLimits::Acc0) && self.t[1] < std::f64::EPSILON {
+        if (limits == ReachedLimits::Acc0) && self.t[1] < core::f64::EPSILON {
             return false;
         }
 
@@ -890,29 +892,25 @@ impl Profile {
 
 impl fmt::Display for Profile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut result = String::new();
-
         match self.direction {
-            Direction::UP => result.push_str("UP_"),
-            Direction::DOWN => result.push_str("DOWN_"),
+            Direction::UP => write!(f, "UP_")?,
+            Direction::DOWN => write!(f, "DOWN_")?,
         }
 
         match self.limits {
-            ReachedLimits::Acc0Acc1Vel => result.push_str("ACC0_ACC1_VEL"),
-            ReachedLimits::Vel => result.push_str("VEL"),
-            ReachedLimits::Acc0 => result.push_str("ACC0"),
-            ReachedLimits::Acc1 => result.push_str("ACC1"),
-            ReachedLimits::Acc0Acc1 => result.push_str("ACC0_ACC1"),
-            ReachedLimits::Acc0Vel => result.push_str("ACC0_VEL"),
-            ReachedLimits::Acc1Vel => result.push_str("ACC1_VEL"),
-            ReachedLimits::None => result.push_str("NONE"),
+            ReachedLimits::Acc0Acc1Vel => write!(f, "ACC0_ACC1_VEL")?,
+            ReachedLimits::Vel => write!(f, "VEL")?,
+            ReachedLimits::Acc0 => write!(f, "ACC0")?,
+            ReachedLimits::Acc1 => write!(f, "ACC1")?,
+            ReachedLimits::Acc0Acc1 => write!(f, "ACC0_ACC1")?,
+            ReachedLimits::Acc0Vel => write!(f, "ACC0_VEL")?,
+            ReachedLimits::Acc1Vel => write!(f, "ACC1_VEL")?,
+            ReachedLimits::None => write!(f, "NONE")?,
         }
 
         match self.control_signs {
-            ControlSigns::UDDU => result.push_str("_UDDU"),
-            ControlSigns::UDUD => result.push_str("_UDUD"),
+            ControlSigns::UDDU => write!(f, "_UDDU"),
+            ControlSigns::UDUD => write!(f, "_UDUD"),
         }
-
-        write!(f, "{}", result)
     }
 }

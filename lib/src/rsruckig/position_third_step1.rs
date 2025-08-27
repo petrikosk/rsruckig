@@ -3,6 +3,8 @@ use crate::block::{Block, Interval};
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 use crate::roots;
 
+use num_traits::Float;
+
 #[derive(Debug, Default)]
 pub struct PositionThirdOrderStep1 {
     v0: f64,

@@ -2,6 +2,8 @@
 
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+use num_traits::Float;
+
 pub struct VelocityThirdOrderStep2 {
     a0: f64,
     tf: f64,

@@ -4,7 +4,9 @@
 //! for safely stopping motion when a trajectory needs to be interrupted.
 
 use crate::util::integrate;
-use std::f64;
+use core::f64;
+
+use num_traits::Float;
 
 const EPS: f64 = 2.2e-14;
 
@@ -175,10 +177,10 @@ impl BrakeProfile {
 
         if a0 > a_max {
             self.j[0] = -j_max;
-            self.t[0] = (a0 - a_max) / j_max + std::f64::EPSILON;
+            self.t[0] = (a0 - a_max) / j_max + core::f64::EPSILON;
         } else if a0 < a_min {
             self.j[0] = j_max;
-            self.t[0] = -(a0 - a_min) / j_max + std::f64::EPSILON;
+            self.t[0] = -(a0 - a_min) / j_max + core::f64::EPSILON;
         }
     }
 

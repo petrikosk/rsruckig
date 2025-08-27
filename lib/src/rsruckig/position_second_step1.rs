@@ -4,6 +4,8 @@ use crate::{
     profile::{ControlSigns, Profile, ReachedLimits},
 };
 
+use num_traits::Float;
+
 #[derive(Debug)]
 pub struct PositionSecondOrderStep1 {
     v0: f64,
