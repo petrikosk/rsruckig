@@ -25,6 +25,7 @@ accepted for the _Robotics: Science and Systems (RSS), 2021_ conference.
 - **Jerk-limited Motion**: Ensures smooth motion by limiting jerk.
 - **Waypoint-based Trajectory Generation**: Supports intermediate waypoints for complex paths.
 - **Customizable Error Handling**: Implement your own error handling strategies using the `RuckigErrorHandler` trait.
+- **no-std support**: Run this library on embedded systems without the standard library (still requires `alloc`)
 
 ## Installation
 
@@ -32,6 +33,14 @@ To build the project, run:
 
 ```bash
 cargo build --release
+```
+
+## No std usage
+
+This crate still requires `alloc`. Use the following in your Cargo.toml:
+
+```
+{ default-features = false, features = ["libm", "alloc"] }
 ```
 
 ### Dependencies
