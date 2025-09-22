@@ -5,6 +5,7 @@
 
 use arrayvec::ArrayVec;
 
+#[cfg(not(feature = "std"))]
 use num_traits::Float;
 
 const COS_120: f64 = -0.50;

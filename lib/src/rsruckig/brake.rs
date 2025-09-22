@@ -6,6 +6,7 @@
 use crate::util::integrate;
 use core::f64;
 
+#[cfg(not(feature = "std"))]
 use num_traits::Float;
 
 const EPS: f64 = 2.2e-14;

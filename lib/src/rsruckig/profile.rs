@@ -8,6 +8,7 @@ use crate::roots;
 use crate::util::integrate;
 use core::fmt;
 
+#[cfg(not(feature = "std"))]
 use num_traits::Float;
 
 static V_EPS: f64 = 1e-12;

@@ -2,6 +2,7 @@
 
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+#[cfg(not(feature = "std"))]
 use num_traits::Float;
 
 pub struct VelocityThirdOrderStep2 {

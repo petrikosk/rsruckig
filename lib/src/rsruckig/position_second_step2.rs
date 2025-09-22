@@ -1,6 +1,7 @@
 //! Mathematical equations for Step 2 in second-order position interface: Time synchronization
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+#[cfg(not(feature = "std"))]
 use num_traits::Float;
 
 #[derive(Debug)]
