@@ -15,8 +15,13 @@ use crate::input_parameter::{DurationDiscretization, InputParameter};
 use crate::output_parameter::OutputParameter;
 use crate::result::RuckigResult;
 use crate::trajectory::Trajectory;
-use std::marker::PhantomData;
+use core::marker::PhantomData;
+
+// Instant is not available in core
+#[cfg(feature = "std")]
 use std::time::Instant;
+
+use crate::alloc::format;
 
 /// Main trajectory generation class
 ///
@@ -253,7 +258,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     /// // Generate trajectory step by step
     /// while otg.update(&input, &mut output).unwrap() == RuckigResult::Working {
     ///     // Use the new state (output.new_position, output.new_velocity, etc.)
-    ///     
+    ///
     ///     // Pass the new state to the input for the next iteration
     ///     output.pass_to_input(&mut input);
     /// }
@@ -263,6 +268,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
         input: &InputParameter<DOF>,
         output: &mut OutputParameter<DOF>,
     ) -> Result<RuckigResult, RuckigError> {
+        #[cfg(feature = "std")]
         let start = Instant::now();
 
         if self.degrees_of_freedom == 0
@@ -295,8 +301,15 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
         );
         output.did_section_change = output.new_section > old_section; // Report only forward section changes
 
-        let stop = Instant::now();
-        output.calculation_duration = (stop.duration_since(start).as_nanos() as f64) / 1000.0;
+        #[cfg(feature = "std")]
+        {
+            let stop = Instant::now();
+            output.calculation_duration = (stop.duration_since(start).as_nanos() as f64) / 1000.0;
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            output.calculation_duration = 0.0;
+        }
 
         output.pass_to_input(&mut self.current_input);
 

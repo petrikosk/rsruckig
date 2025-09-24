@@ -41,6 +41,21 @@
 
 #![allow(clippy::too_many_arguments)]
 
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+mod alloc {
+    #[cfg(feature = "alloc")]
+    extern crate alloc;
+
+    #[cfg(not(feature = "std"))]
+    pub use alloc::*;
+    #[cfg(feature = "std")]
+    pub use std::*;
+}
+
 pub mod block;
 pub mod brake;
 pub mod calculator_target;
@@ -77,7 +92,7 @@ pub mod prelude {
     pub use super::ruckig::Ruckig;
     pub use super::trajectory::Trajectory;
     pub use super::util::DataArrayOrVec;
-    
+
     // Also re-export the macros for convenience
     pub use crate::daov_stack;
     pub use crate::daov_heap;

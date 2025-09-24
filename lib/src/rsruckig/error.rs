@@ -5,6 +5,8 @@
 
 use thiserror::Error;
 
+use crate::alloc::string::{String, ToString};
+
 /// Errors that can occur during trajectory generation
 ///
 /// This enum represents the different types of errors that can occur during
@@ -59,7 +61,7 @@ pub enum RuckigError {
 ///         // Return Ok to continue execution despite the error
 ///         Ok(())
 ///     }
-///     
+///
 ///     fn handle_calculator_error(message: &str) -> Result<(), RuckigError> {
 ///         error!("Calculator error: {}", message);
 ///         // Return Ok to continue execution despite the error

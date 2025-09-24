@@ -6,6 +6,9 @@ use crate::{
     roots::*,
 };
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 pub struct PositionThirdOrderStep2 {
     v0: f64,
     a0: f64,

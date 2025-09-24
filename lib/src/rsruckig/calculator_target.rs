@@ -19,6 +19,8 @@ use crate::{
     velocity_third_step2::VelocityThirdOrderStep2,
 };
 
+use crate::alloc::{vec, vec::Vec, format};
+
 #[derive(Debug)]
 pub struct TargetCalculator<const DOF: usize> {
     eps: f64,

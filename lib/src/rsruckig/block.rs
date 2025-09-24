@@ -1,9 +1,9 @@
 //! Which times are possible for synchronization?
 use crate::profile::Profile;
-use std::cmp::Ordering;
-use std::f64;
-use std::fmt;
-use std::option::Option;
+use core::cmp::Ordering;
+use core::f64;
+use core::fmt;
+use core::option::Option;
 
 #[derive(Clone, Default, Debug)]
 pub struct Block {
@@ -46,7 +46,7 @@ impl Block {
         } else if *valid_profile_counter == 2 {
             if f64::abs(
                 valid_profiles[0].t_sum.last().unwrap() - valid_profiles[1].t_sum.last().unwrap(),
-            ) < 8.0 * std::f64::EPSILON
+            ) < 8.0 * core::f64::EPSILON
             {
                 block.set_min_profile(&valid_profiles[0]);
                 return true;
@@ -178,14 +178,14 @@ impl Block {
 
 impl fmt::Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut result = format!("[{} ", self.t_min);
+        write!(f, "[{} ", self.t_min)?;
         if let Some(a) = &self.a {
-            result += &format!("{}] [{} ", a.left, a.right);
+            write!(f, "{}] [{} ", a.left, a.right)?;
         }
         if let Some(b) = &self.b {
-            result += &format!("{}] [{} ", b.left, b.right);
+            write!(f, "{}] [{} ", b.left, b.right)?;
         }
-        write!(f, "{}-", result)
+        write!(f, "-")
     }
 }
 

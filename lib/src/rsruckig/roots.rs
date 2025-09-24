@@ -5,11 +5,14 @@
 
 use arrayvec::ArrayVec;
 
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 const COS_120: f64 = -0.50;
 const SIN_120: f64 = 0.866_025_403_784_438_6;
 pub const TOLERANCE: f64 = 1e-14;
 
-pub fn pow2<T: std::ops::Mul<Output = T> + Copy>(v: T) -> T {
+pub fn pow2<T: core::ops::Mul<Output = T> + Copy>(v: T) -> T {
     v * v
 }
 
@@ -53,7 +56,7 @@ impl<T, const N: usize> IntoIterator for Set<T, N> {
 
 impl<'a, T, const N: usize> IntoIterator for &'a Set<T, N> {
     type Item = &'a T;
-    type IntoIter = std::slice::Iter<'a, T>;
+    type IntoIter = core::slice::Iter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.data.iter()
@@ -62,7 +65,7 @@ impl<'a, T, const N: usize> IntoIterator for &'a Set<T, N> {
 
 impl<'a, T, const N: usize> IntoIterator for &'a mut Set<T, N> {
     type Item = &'a mut T;
-    type IntoIter = std::slice::IterMut<'a, T>;
+    type IntoIter = core::slice::IterMut<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.data.iter_mut()
@@ -101,7 +104,7 @@ impl<const N: usize> IntoIterator for PositiveSet<N> {
 
 impl<'a, const N: usize> IntoIterator for &'a PositiveSet<N> {
     type Item = &'a f64;
-    type IntoIter = std::slice::Iter<'a, f64>;
+    type IntoIter = core::slice::Iter<'a, f64>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.data.iter()
@@ -110,7 +113,7 @@ impl<'a, const N: usize> IntoIterator for &'a PositiveSet<N> {
 
 impl<'a, const N: usize> IntoIterator for &'a mut PositiveSet<N> {
     type Item = &'a mut f64;
-    type IntoIter = std::slice::IterMut<'a, f64>;
+    type IntoIter = core::slice::IterMut<'a, f64>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.data.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -129,7 +132,7 @@ impl<const N: usize> Default for PositiveSet<N> {
 pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
     let mut roots = PositiveSet::new();
 
-    if d.abs() < std::f64::EPSILON {
+    if d.abs() < core::f64::EPSILON {
         // First solution is x = 0
         roots.insert(0.0);
 
@@ -140,9 +143,9 @@ pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
         let b = a;
         let _a = 0.0;
 
-        if b.abs() < std::f64::EPSILON {
+        if b.abs() < core::f64::EPSILON {
             // Linear equation
-            if c.abs() > std::f64::EPSILON {
+            if c.abs() > core::f64::EPSILON {
                 roots.insert(-tmp / c);
             }
         } else {
@@ -155,10 +158,10 @@ pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
                 roots.insert((-c - y) * inv2b);
             }
         }
-    } else if a.abs() < std::f64::EPSILON {
-        if b.abs() < std::f64::EPSILON {
+    } else if a.abs() < core::f64::EPSILON {
+        if b.abs() < core::f64::EPSILON {
             // Linear equation
-            if c.abs() > std::f64::EPSILON {
+            if c.abs() > core::f64::EPSILON {
                 roots.insert(-d / c);
             }
         } else {
@@ -202,7 +205,7 @@ pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
                 r = (x * x - yy).sqrt();
             } else {
                 // Vertical line
-                theta = std::f64::consts::PI / 2.0;
+                theta = core::f64::consts::PI / 2.0;
                 r = y;
             }
             // Calculate cube root
@@ -261,7 +264,7 @@ pub fn solve_resolvent(x: &mut [f64; 3], a: f64, b: f64, c: f64) -> usize {
         x[0] = (a_ + b_) - a;
         x[1] = -(a_ + b_) / 2.0 - a;
         x[2] = 3.0_f64.sqrt() * (a_ - b_) / 2.0;
-        if x[2].abs() < std::f64::EPSILON {
+        if x[2].abs() < core::f64::EPSILON {
             x[2] = x[1];
             2
         } else {
@@ -278,12 +281,12 @@ pub fn solve_quart_monic_coeffs(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<4
     let a_squared = a * a;
     let four_b = 4.0 * b;
 
-    if d.abs() < std::f64::EPSILON {
-        if c.abs() < std::f64::EPSILON {
+    if d.abs() < core::f64::EPSILON {
+        if c.abs() < core::f64::EPSILON {
             roots.insert(0.0);
 
             let d_ = a_squared - four_b;
-            if d_.abs() < std::f64::EPSILON {
+            if d_.abs() < core::f64::EPSILON {
                 roots.insert(-a / 2.0);
             } else if d_ > 0.0 {
                 let sqrt_d = d_.sqrt();
@@ -293,7 +296,7 @@ pub fn solve_quart_monic_coeffs(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<4
             return roots;
         }
 
-        if a.abs() < std::f64::EPSILON && b.abs() < std::f64::EPSILON {
+        if a.abs() < core::f64::EPSILON && b.abs() < core::f64::EPSILON {
             roots.insert(0.0);
             roots.insert(-c.cbrt());
             return roots;
@@ -397,9 +400,9 @@ pub fn poly_monic_deri<const N: usize>(monic_coeffs: &ArrayVec<f64, N>) -> Array
 pub fn poly_eval<const N: usize>(p: &ArrayVec<f64, N>, x: f64) -> f64 {
     let mut result = 0.0;
     let n = p.len();
-    if x.abs() < std::f64::EPSILON {
+    if x.abs() < core::f64::EPSILON {
         result = p[n - 1];
-    } else if (x - 1.0).abs() < std::f64::EPSILON {
+    } else if (x - 1.0).abs() < core::f64::EPSILON {
         result = p.iter().sum();
     } else {
         let mut xn = 1.0;
@@ -433,7 +436,7 @@ pub fn shrink_interval<const N: usize, const MAX_ITS: usize>(
         return h;
     }
     if fl > 0.0 {
-        std::mem::swap(&mut l, &mut h);
+        core::mem::swap(&mut l, &mut h);
     }
 
     let mut rts = (l + h) / 2.0;
@@ -448,7 +451,7 @@ pub fn shrink_interval<const N: usize, const MAX_ITS: usize>(
             dxold = dx;
             dx = (h - l) / 2.0;
             rts = l + dx;
-            if (l - rts).abs() < std::f64::EPSILON {
+            if (l - rts).abs() < core::f64::EPSILON {
                 break;
             }
         } else {
@@ -456,7 +459,7 @@ pub fn shrink_interval<const N: usize, const MAX_ITS: usize>(
             dx = f / df;
             let temp = rts;
             rts -= dx;
-            if (temp - rts).abs() < std::f64::EPSILON {
+            if (temp - rts).abs() < core::f64::EPSILON {
                 break;
             }
         }

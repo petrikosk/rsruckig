@@ -6,8 +6,10 @@
 
 use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::util::{join, DataArrayOrVec};
-use std::fmt;
-use std::ops::Deref;
+use core::fmt;
+use core::ops::Deref;
+
+use crate::alloc::format;
 
 /// Control interface for trajectory generation
 ///
