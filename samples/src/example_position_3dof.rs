@@ -1,8 +1,7 @@
-use gnuplot::Coordinate::Graph;
-use gnuplot::{AxesCommon, Caption, Figure};
+use plotters::prelude::*;
 use rsruckig::prelude::*;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.01);
     let mut input = InputParameter::new(None);
     let mut output = OutputParameter::new(None);
@@ -45,18 +44,77 @@ fn main() {
     println!("Max calculation duration: {} µs", max_calculation_duration);
     println!("InputParameter: {}", input);
 
-    let mut fg = Figure::new();
+    // ---- Plotters Section ----
+
     let chart_title = format!(
-        "S-Curve Position Motion Profile. Max. calc duration {} µs",
+        "S-Curve Position Motion Profile (max calc {:.2} µs)",
         max_calculation_duration
     );
-    fg.axes2d()
-        .set_title(chart_title.as_str(), &[])
-        .set_legend(Graph(0.5), Graph(0.9), &[], &[])
-        .set_x_label("time in seconds", &[])
-        .set_y_label("Position 3 DoF", &[])
-        .lines(x_time.clone(), y_pos1.clone(), &[Caption("Position 1")])
-        .lines(x_time.clone(), y_pos2.clone(), &[Caption("Position 2")])
-        .lines(x_time.clone(), y_pos3.clone(), &[Caption("Position 3")]);
-    fg.show().unwrap();
+
+    let plot_path = "example_position_3dof.svg";
+    let root = SVGBackend::new(plot_path, (1280, 768)).into_drawing_area();
+    root.fill(&WHITE)?;
+
+    let x_min = *x_time.first().unwrap_or(&0.0);
+    let x_max = *x_time.last().unwrap_or(&1.0);
+
+    // Find y-range across all datasets
+    let all_y = y_pos1
+        .iter()
+        .chain(&y_pos2)
+        .chain(&y_pos3)
+        .cloned()
+        .collect::<Vec<f64>>();
+    let y_min = all_y.iter().cloned().fold(f64::INFINITY, f64::min);
+    let y_max = all_y.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
+    let mut chart = ChartBuilder::on(&root)
+        .caption(chart_title, ("sans-serif", 25))
+        .margin(20)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .build_cartesian_2d(x_min..x_max, y_min..y_max)?;
+
+    chart
+        .configure_mesh()
+        .x_desc("Time [s]")
+        .y_desc("Position 3 DoF")
+        .label_style(("sans-serif", 15))
+        .draw()?;
+
+    // Plot each line
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_pos1.iter()).map(|(&x, &y)| (x, y)),
+            &RED,
+        ))?
+        .label("Position 1")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_pos2.iter()).map(|(&x, &y)| (x, y)),
+            &BLUE,
+        ))?
+        .label("Position 2")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_pos3.iter()).map(|(&x, &y)| (x, y)),
+            &GREEN,
+        ))?
+        .label("Position 3")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &GREEN));
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
+
+    root.present()?;
+
+    println!("Plot saved to '{}'", plot_path);
+    Ok(())
 }
