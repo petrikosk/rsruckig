@@ -1,8 +1,8 @@
-use gnuplot::Coordinate::Graph;
-use gnuplot::{AxesCommon, Caption, Figure};
+use plotters::prelude::*;
+use rsruckig::prelude::*;
 use rsruckig::prelude::*;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
     let mut input = InputParameter::new(None);
     let mut output = OutputParameter::new(None);
@@ -42,19 +42,87 @@ fn main() {
     }
     println!("Max calculation duration: {} µs", max_calculation_duration);
 
-    let mut fg = Figure::new();
+    // ---- Plotters Section ----
+
     let chart_title = format!(
-        "S-Curve Velocity Motion Profile. Max. calc duration {} µs",
+        "S-Curve Position Motion Profile (max calc {:.2} µs)",
         max_calculation_duration
     );
-    fg.axes2d()
-        .set_title(chart_title.as_str(), &[])
-        .set_legend(Graph(0.5), Graph(0.9), &[], &[])
-        .set_x_label("time in seconds", &[])
-        .set_y_label("Position derivatives u, u/s, u/s², u/s³", &[])
-        .lines(x_time.clone(), y_pos.clone(), &[Caption("Position")])
-        .lines(x_time.clone(), y_vel.clone(), &[Caption("Velocity")])
-        .lines(x_time.clone(), y_acc.clone(), &[Caption("Acceleration")])
-        .lines(x_time.clone(), y_jerk.clone(), &[Caption("Jerk")]);
-    fg.show().unwrap();
+
+    let plot_path = "example_velocity_1dof.svg";
+    let root = SVGBackend::new(plot_path, (1280, 768)).into_drawing_area();
+    root.fill(&WHITE)?;
+
+    let x_min = *x_time.first().unwrap_or(&0.0);
+    let x_max = *x_time.last().unwrap_or(&1.0);
+
+    // Find y-range across all datasets
+    let all_y = y_pos
+        .iter()
+        .chain(&y_vel)
+        .chain(&y_acc)
+        .chain(&y_jerk)
+        .cloned()
+        .collect::<Vec<f64>>();
+    let y_min = all_y.iter().cloned().fold(f64::INFINITY, f64::min);
+    let y_max = all_y.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
+    let mut chart = ChartBuilder::on(&root)
+        .caption(chart_title, ("sans-serif", 25))
+        .margin(20)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .build_cartesian_2d(x_min..x_max, y_min..y_max)?;
+
+    chart
+        .configure_mesh()
+        .x_desc("Time [s]")
+        .y_desc("Position derivatives u, u/s, u/s², u/s³")
+        .label_style(("sans-serif", 15))
+        .draw()?;
+
+    // Plot each line
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_pos.iter()).map(|(&x, &y)| (x, y)),
+            &RED,
+        ))?
+        .label("Position")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_vel.iter()).map(|(&x, &y)| (x, y)),
+            &BLUE,
+        ))?
+        .label("Velocity")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_acc.iter()).map(|(&x, &y)| (x, y)),
+            &GREEN,
+        ))?
+        .label("Acceleration")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &GREEN));
+
+    chart
+        .draw_series(LineSeries::new(
+            x_time.iter().zip(y_jerk.iter()).map(|(&x, &y)| (x, y)),
+            &MAGENTA,
+        ))?
+        .label("Jerk")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &MAGENTA));
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
+
+    root.present()?;
+
+    println!("Plot saved to '{}'", plot_path);
+    Ok(())
 }
+

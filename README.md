@@ -136,7 +136,7 @@ fn main() {
 
 Let's get started!
 
-![Trajectory Profile](https://github.com/petrikosk/rsruckig/raw/master/doc/example_profile.png?raw=true)
+[<img src="doc/example_profile.svg" width="800" alt="Trajectory Profile">](doc/example_profile.svg)
 
 ### Waypoint-based Trajectory Generation
 

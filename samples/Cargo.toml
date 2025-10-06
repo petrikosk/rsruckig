@@ -27,6 +27,6 @@ path = "src/example_position_3_dynamic_dof.rs"
 
 [dependencies]
 rsruckig = { path = "../lib" }
-gnuplot = "0.0.39"
 log = "0.4.20"
 log4rs = "1.2.0"
+plotters = "0.3.7"
