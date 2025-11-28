@@ -5,7 +5,7 @@
 
 use core::ops::{Deref, DerefMut, Index, IndexMut};
 
-use crate::alloc::{vec, vec::Vec, boxed::Box, format, string::{String, ToString}};
+use crate::alloc::{vec, vec::Vec, format, string::{String, ToString}};
 
 pub fn join<const DOF: usize>(numbers: &[f64], high_precision: bool) -> String {
     if high_precision {
@@ -103,6 +103,7 @@ impl<T: Default + Clone + core::fmt::Debug, const N: usize> DataArrayOrVec<T, N>
         }
     }
 
+    #[inline]
     pub fn get(&self, index: usize) -> Option<&T> {
         match self {
             DataArrayOrVec::Heap(v) => v.get(index),
@@ -110,18 +111,28 @@ impl<T: Default + Clone + core::fmt::Debug, const N: usize> DataArrayOrVec<T, N>
         }
     }
 
-    pub fn iter(&self) -> Box<dyn Iterator<Item = &T> + '_> {
+    #[inline]
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         match self {
-            DataArrayOrVec::Heap(v) => Box::new(v.iter()),
-            DataArrayOrVec::Stack(a) => Box::new(a.iter()),
+            DataArrayOrVec::Heap(v) => v.get_mut(index),
+            DataArrayOrVec::Stack(a) => a.get_mut(index),
         }
     }
 
-    pub fn iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut T> + '_> {
-        match self {
-            DataArrayOrVec::Heap(v) => Box::new(v.iter_mut()),
-            DataArrayOrVec::Stack(a) => Box::new(a.iter_mut()),
-        }
+    /// Returns an iterator over the elements.
+    /// Uses the Deref implementation to avoid dynamic dispatch overhead.
+    #[inline]
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        // Deref gives us &[T], which has an efficient iter()
+        <Self as core::ops::Deref>::deref(self).iter()
+    }
+
+    /// Returns a mutable iterator over the elements.
+    /// Uses the DerefMut implementation to avoid dynamic dispatch overhead.
+    #[inline]
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        // DerefMut gives us &mut [T], which has an efficient iter_mut()
+        <Self as core::ops::DerefMut>::deref_mut(self).iter_mut()
     }
 }
 
@@ -144,6 +155,7 @@ impl<T: Clone + Default + core::fmt::Debug, const N: usize> Default for DataArra
 impl<T: Clone + Default + core::fmt::Debug, const N: usize> Index<usize> for DataArrayOrVec<T, N> {
     type Output = T;
 
+    #[inline]
     fn index(&self, index: usize) -> &Self::Output {
         match self {
             DataArrayOrVec::Heap(v) => &v[index],
@@ -155,6 +167,7 @@ impl<T: Clone + Default + core::fmt::Debug, const N: usize> Index<usize> for Dat
 impl<T: Clone + Default + core::fmt::Debug, const N: usize> IndexMut<usize>
     for DataArrayOrVec<T, N>
 {
+    #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
             DataArrayOrVec::Heap(v) => &mut v[index],
@@ -164,6 +177,7 @@ impl<T: Clone + Default + core::fmt::Debug, const N: usize> IndexMut<usize>
 }
 
 impl<T: Clone + Default + core::fmt::Debug, const N: usize> Clone for DataArrayOrVec<T, N> {
+    #[inline]
     fn clone(&self) -> Self {
         match self {
             DataArrayOrVec::Heap(vec) => DataArrayOrVec::Heap(vec.clone()),
@@ -175,6 +189,7 @@ impl<T: Clone + Default + core::fmt::Debug, const N: usize> Clone for DataArrayO
 impl<T: Clone + Default + core::fmt::Debug, const N: usize> Deref for DataArrayOrVec<T, N> {
     type Target = [T];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         match self {
             DataArrayOrVec::Heap(vec) => vec,
@@ -184,6 +199,7 @@ impl<T: Clone + Default + core::fmt::Debug, const N: usize> Deref for DataArrayO
 }
 
 impl<T: Clone + Default + core::fmt::Debug, const N: usize> DerefMut for DataArrayOrVec<T, N> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             DataArrayOrVec::Heap(vec) => vec,

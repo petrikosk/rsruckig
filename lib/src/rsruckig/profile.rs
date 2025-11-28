@@ -48,7 +48,7 @@ pub enum ControlSigns {
     UDUD,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Bound {
     // The extreme position
     pub min: f64,
@@ -143,7 +143,7 @@ impl Profile {
             return false;
         }
 
-        if *self.t_sum.last().unwrap() > T_MAX {
+        if self.t_sum[6] > T_MAX {
             // Use T_PRECISION for numerical reasons.
             return false;
         }
@@ -196,8 +196,8 @@ impl Profile {
         };
 
         // For Velocity limit checks. Here I'm using V_PRECISION and A_PRECISION for clarity.
-        (self.v.last().unwrap() - self.vf).abs() < V_PRECISION
-            && (self.a.last().unwrap() - self.af).abs() < A_PRECISION
+        (self.v[7] - self.vf).abs() < V_PRECISION
+            && (self.a[7] - self.af).abs() < A_PRECISION
             && self.a[1] >= a_low_lim
             && self.a[3] >= a_low_lim
             && self.a[5] >= a_low_lim
@@ -267,8 +267,7 @@ impl Profile {
         self.t_sum = [
             0.0, self.t[1], self.t[1], self.t[1], self.t[1], self.t[1], self.t[1],
         ];
-        //self.t_sum.fill(self.t[1]);
-        if *self.t_sum.last().unwrap_or(&0.0) > T_MAX {
+        if self.t_sum[6] > T_MAX {
             return false;
         }
 
@@ -291,7 +290,7 @@ impl Profile {
             Direction::DOWN
         };
 
-        (self.v.last().unwrap_or(&0.0) - self.vf).abs() < V_PRECISION
+        (self.v[7] - self.vf).abs() < V_PRECISION
     }
 
     #[inline]
@@ -367,7 +366,7 @@ impl Profile {
             return false;
         }
 
-        if self.t_sum.last().unwrap_or(&0.0) > &T_MAX {
+        if self.t_sum[6] > T_MAX {
             return false;
         }
 
@@ -470,15 +469,16 @@ impl Profile {
             a_max
         } - A_EPS;
 
-        (self.p.last().unwrap_or(&0.0) - self.pf).abs() < P_PRECISION
-            && (self.v.last().unwrap_or(&0.0) - self.vf).abs() < V_PRECISION
-            && (self.a.last().unwrap_or(&0.0) - self.af).abs() < A_PRECISION
-            && [self.a[1], self.a[3], self.a[5]]
-                .iter()
-                .all(|&x| x >= a_low_lim && x <= a_upp_lim)
-            && [self.v[3], self.v[4], self.v[5], self.v[6]]
-                .iter()
-                .all(|&x| x <= v_upp_lim && x >= v_low_lim)
+        (self.p[7] - self.pf).abs() < P_PRECISION
+            && (self.v[7] - self.vf).abs() < V_PRECISION
+            && (self.a[7] - self.af).abs() < A_PRECISION
+            && self.a[1] >= a_low_lim && self.a[1] <= a_upp_lim
+            && self.a[3] >= a_low_lim && self.a[3] <= a_upp_lim
+            && self.a[5] >= a_low_lim && self.a[5] <= a_upp_lim
+            && self.v[3] <= v_upp_lim && self.v[3] >= v_low_lim
+            && self.v[4] <= v_upp_lim && self.v[4] >= v_low_lim
+            && self.v[5] <= v_upp_lim && self.v[5] >= v_low_lim
+            && self.v[6] <= v_upp_lim && self.v[6] >= v_low_lim
     }
 
     #[inline]
@@ -523,8 +523,8 @@ impl Profile {
         self.af = profile.af;
         self.vf = profile.vf;
         self.pf = profile.pf;
-        self.brake = profile.brake.clone();
-        self.accel = profile.accel.clone();
+        self.brake = profile.brake;
+        self.accel = profile.accel;
     }
 
     #[inline]
@@ -568,7 +568,7 @@ impl Profile {
             self.t_sum[i + 1] = self.t_sum[i] + self.t[i + 1];
         }
 
-        if *self.t_sum.last().unwrap_or(&0.0) > T_MAX {
+        if self.t_sum[6] > T_MAX {
             return false;
         }
 
@@ -626,10 +626,14 @@ impl Profile {
         self.control_signs = control_signs;
         self.limits = limits;
 
-        (self.p.last().unwrap_or(&0.0) - self.pf).abs() < P_PRECISION
-            && (self.v.last().unwrap_or(&0.0) - self.vf).abs() < P_PRECISION
-            && self.v[2..=7].iter().all(|&v| v <= v_upp_lim)
-            && self.v[2..=7].iter().all(|&v| v >= v_low_lim)
+        (self.p[7] - self.pf).abs() < P_PRECISION
+            && (self.v[7] - self.vf).abs() < P_PRECISION
+            && self.v[2] <= v_upp_lim && self.v[2] >= v_low_lim
+            && self.v[3] <= v_upp_lim && self.v[3] >= v_low_lim
+            && self.v[4] <= v_upp_lim && self.v[4] >= v_low_lim
+            && self.v[5] <= v_upp_lim && self.v[5] >= v_low_lim
+            && self.v[6] <= v_upp_lim && self.v[6] >= v_low_lim
+            && self.v[7] <= v_upp_lim && self.v[7] >= v_low_lim
     }
 
     #[inline]
@@ -689,7 +693,7 @@ impl Profile {
         }
 
         self.t_sum = [0.0, 0.0, 0.0, self.t[3], self.t[3], self.t[3], self.t[3]];
-        if *self.t_sum.last().unwrap_or(&0.0) > T_MAX {
+        if self.t_sum[6] > T_MAX {
             return false;
         }
 
@@ -718,7 +722,7 @@ impl Profile {
             Direction::DOWN
         };
 
-        (self.p.last().unwrap_or(&0.0) - self.pf).abs() < P_PRECISION
+        (self.p[7] - self.pf).abs() < P_PRECISION
     }
 
     #[inline]
@@ -848,11 +852,11 @@ impl Profile {
 
         if self.pf < extrema.min {
             extrema.min = self.pf;
-            extrema.t_min = self.t_sum.last().unwrap_or(&0.0) + self.brake.duration;
+            extrema.t_min = self.t_sum[6] + self.brake.duration;
         }
         if self.pf > extrema.max {
             extrema.max = self.pf;
-            extrema.t_max = self.t_sum.last().unwrap_or(&0.0) + self.brake.duration;
+            extrema.t_max = self.t_sum[6] + self.brake.duration;
         }
 
         extrema
@@ -883,7 +887,7 @@ impl Profile {
         }
 
         if (self.pf - pt).abs() < 1e-9 {
-            let time = offset + self.t_sum.last().unwrap_or(&0.0);
+            let time = offset + self.t_sum[6];
             return Some((time, self.vf, self.af));
         }
 

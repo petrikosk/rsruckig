@@ -25,9 +25,10 @@ pub fn remove_profile(
 }
 
 impl Block {
+    #[inline]
     pub fn set_min_profile(&mut self, profile: &Profile) {
         self.p_min = profile.clone();
-        self.t_min = self.p_min.t_sum.last().unwrap()
+        self.t_min = self.p_min.t_sum[6]
             + self.p_min.brake.duration
             + self.p_min.accel.duration;
         self.a = None;
@@ -45,7 +46,7 @@ impl Block {
             return true;
         } else if *valid_profile_counter == 2 {
             if f64::abs(
-                valid_profiles[0].t_sum.last().unwrap() - valid_profiles[1].t_sum.last().unwrap(),
+                valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6],
             ) < 8.0 * core::f64::EPSILON
             {
                 block.set_min_profile(&valid_profiles[0]);
@@ -53,9 +54,7 @@ impl Block {
             }
 
             if numerical_robust.unwrap_or(true) {
-                let idx_min = if valid_profiles[0].t_sum.last().unwrap()
-                    < valid_profiles[1].t_sum.last().unwrap()
-                {
+                let idx_min = if valid_profiles[0].t_sum[6] < valid_profiles[1].t_sum[6] {
                     0
                 } else {
                     1
@@ -63,10 +62,10 @@ impl Block {
 
                 let idx_else_1 = (idx_min + 1) % 2;
 
-                block.set_min_profile(&valid_profiles[idx_min].clone());
+                block.set_min_profile(&valid_profiles[idx_min]);
                 block.a = Some(Interval::from_profiles(
-                    &valid_profiles[idx_min].clone(),
-                    &valid_profiles[idx_else_1].clone(),
+                    &valid_profiles[idx_min],
+                    &valid_profiles[idx_else_1],
                 ));
 
                 return true;
@@ -75,18 +74,17 @@ impl Block {
         } else if *valid_profile_counter == 4 {
             // Find "identical" profiles
             if f64::abs(
-                valid_profiles[0].t_sum.last().unwrap() - valid_profiles[1].t_sum.last().unwrap(),
+                valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6],
             ) < 32.0 * f64::EPSILON
                 && valid_profiles[0].direction != valid_profiles[1].direction
             {
                 remove_profile(valid_profiles, valid_profile_counter, 1);
             } else if (f64::abs(
-                valid_profiles[2].t_sum.last().unwrap() - valid_profiles[3].t_sum.last().unwrap(),
+                valid_profiles[2].t_sum[6] - valid_profiles[3].t_sum[6],
             ) < 256.0 * f64::EPSILON
                 && valid_profiles[2].direction != valid_profiles[3].direction)
                 || (f64::abs(
-                    valid_profiles[0].t_sum.last().unwrap()
-                        - valid_profiles[3].t_sum.last().unwrap(),
+                    valid_profiles[0].t_sum[6] - valid_profiles[3].t_sum[6],
                 ) < 256.0 * f64::EPSILON
                     && valid_profiles[0].direction != valid_profiles[3].direction)
             {
@@ -104,9 +102,8 @@ impl Block {
             .take(*valid_profile_counter)
             .enumerate()
             .min_by(|(_, a), (_, b)| {
-                a.t_sum
-                    .last()
-                    .partial_cmp(&b.t_sum.last())
+                a.t_sum[6]
+                    .partial_cmp(&b.t_sum[6])
                     .unwrap_or(Ordering::Equal)
             })
             .map(|(idx, _)| idx)
@@ -205,11 +202,12 @@ impl Interval {
         }
     }
 
+    #[inline]
     pub fn from_profiles(profile_left: &Profile, profile_right: &Profile) -> Self {
-        let left_duration = *profile_left.t_sum.last().unwrap()
+        let left_duration = profile_left.t_sum[6]
             + profile_left.brake.duration
             + profile_left.accel.duration;
-        let right_duration = *profile_right.t_sum.last().unwrap()
+        let right_duration = profile_right.t_sum[6]
             + profile_right.brake.duration
             + profile_right.accel.duration;
 

@@ -47,6 +47,8 @@ impl<const DOF: usize> Trajectory<DOF> {
             degrees_of_freedom: dofs.unwrap_or(DOF),
         }
     }
+
+    #[inline]
     pub fn state_to_integrate_from<F>(
         &self,
         time: f64,
@@ -59,20 +61,21 @@ impl<const DOF: usize> Trajectory<DOF> {
 
         if time >= self.duration {
             *new_section = self.profiles.len();
-            let profiles_dof = &self.profiles.last().unwrap();
+            let profiles_len = self.profiles.len();
+            let profiles_dof = &self.profiles[profiles_len - 1];
             for dof in 0..degrees_of_freedom {
-                let t_pre = if self.profiles.len() > 1 {
+                let t_pre = if profiles_len > 1 {
                     self.cumulative_times[self.cumulative_times.len() - 2]
                 } else {
                     profiles_dof[dof].brake.duration
                 };
-                let t_diff = time - (t_pre + profiles_dof[dof].t_sum.last().unwrap());
+                let t_diff = time - (t_pre + profiles_dof[dof].t_sum[6]);
                 set_integrate(
                     dof,
                     t_diff,
-                    *profiles_dof[dof].p.last().unwrap(),
-                    *profiles_dof[dof].v.last().unwrap(),
-                    *profiles_dof[dof].a.last().unwrap(),
+                    profiles_dof[dof].p[7],
+                    profiles_dof[dof].v[7],
+                    profiles_dof[dof].a[7],
                     0.0,
                 );
             }
@@ -114,13 +117,13 @@ impl<const DOF: usize> Trajectory<DOF> {
                     t_diff_dof -= p.brake.duration;
                 }
             }
-            if t_diff_dof >= *p.t_sum.last().unwrap_or(&0.0) {
+            if t_diff_dof >= p.t_sum[6] {
                 set_integrate(
                     dof,
-                    t_diff_dof - p.t_sum.last().unwrap_or(&0.0),
-                    *p.p.last().unwrap_or(&0.0),
-                    *p.v.last().unwrap_or(&0.0),
-                    *p.a.last().unwrap_or(&0.0),
+                    t_diff_dof - p.t_sum[6],
+                    p.p[7],
+                    p.v[7],
+                    p.a[7],
                     0.0,
                 );
                 continue;
@@ -147,6 +150,7 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
     }
 
+    #[inline]
     pub fn at_time(
         &self,
         time: f64,
@@ -180,18 +184,22 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
     }
 
+    #[inline]
     pub fn get_profiles(&self) -> &Vec<DataArrayOrVec<Profile, { DOF }>> {
         &self.profiles
     }
 
+    #[inline]
     pub fn get_duration(&self) -> f64 {
         self.duration
     }
 
+    #[inline]
     pub fn get_intermediate_durations(&self) -> &DataArrayOrVec<f64, { DOF }> {
         &self.cumulative_times
     }
 
+    #[inline]
     pub fn get_independent_min_durations(&self) -> &DataArrayOrVec<f64, { DOF }> {
         &self.independent_min_durations
     }
