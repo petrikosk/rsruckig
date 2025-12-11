@@ -167,7 +167,7 @@ impl VelocityThirdOrderStep1 {
             p.set_boundary_from_profile(input);
 
             if self.time_all_single_step(p, self._a_max, self._a_min, self._j_max) {
-                block.t_min = *p.t_sum.last().unwrap_or(&0.0) + p.brake.duration + p.accel.duration;
+                block.t_min = p.t_sum[6] + p.brake.duration + p.accel.duration;
                 if f64::abs(self.a0) > f64::EPSILON {
                     block.a = Some(Interval::new(block.t_min, f64::INFINITY));
                 }

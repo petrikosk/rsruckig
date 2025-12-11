@@ -38,7 +38,7 @@ impl VelocitySecondOrderStep2 {
             self._a_max,
             self._a_min,
         ) {
-            profile.pf = *profile.p.last().unwrap();
+            profile.pf = profile.p[7];
             return true;
         }
 

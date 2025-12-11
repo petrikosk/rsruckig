@@ -127,8 +127,8 @@ fn benchmark<const DOF: usize>(
     let mut global: Vec<f64> = Vec::new();
 
     for _ in 0..*n {
-        let mut average_ = 0.0;
-        let mut worst_: f32 = 0.0;
+        let mut average_: f64 = 0.0;
+        let mut worst_: f64 = 0.0;
         let mut n: usize = 1;
 
         let start = Instant::now();
@@ -156,8 +156,8 @@ fn benchmark<const DOF: usize>(
                 continue;
             }
 
-            let time: f32 = check_calculation(&mut otg, &input) as f32;
-            average_ = average_ + (time - average_) / n as f32;
+            let time = check_calculation(&mut otg, &input);
+            average_ = average_ + (time - average_) / n as f64;
             worst_ = worst_.max(time);
             n += 1;
         }
@@ -165,8 +165,8 @@ fn benchmark<const DOF: usize>(
         let global_ =
             stop.duration_since(start).as_nanos() as f64 / 1000.0 / number_of_trajectories as f64;
 
-        average.push(average_ as f64);
-        worst.push(worst_ as f64);
+        average.push(average_);
+        worst.push(worst_);
         global.push(global_);
     }
     let (average_mean, average_std) = analyse(&average);

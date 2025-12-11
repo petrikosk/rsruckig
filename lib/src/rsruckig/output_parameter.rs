@@ -106,10 +106,17 @@ impl<const DOF: usize> OutputParameter<DOF> {
     ///     output.pass_to_input(&mut input);
     /// }
     /// ```
+    #[inline]
     pub fn pass_to_input(&self, input: &mut InputParameter<DOF>) {
-        input.current_position = self.new_position.clone();
-        input.current_velocity = self.new_velocity.clone();
-        input.current_acceleration = self.new_acceleration.clone();
+        input
+            .current_position
+            .copy_from_slice(&self.new_position);
+        input
+            .current_velocity
+            .copy_from_slice(&self.new_velocity);
+        input
+            .current_acceleration
+            .copy_from_slice(&self.new_acceleration);
     }
 }
 

@@ -38,7 +38,7 @@ impl VelocitySecondOrderStep1 {
         p.t[6] = 0.0;
 
         if p.check_for_second_order_velocity(ControlSigns::UDDU, ReachedLimits::Acc0, af) {
-            block.t_min = p.t_sum.last().unwrap() + p.brake.duration + p.accel.duration;
+            block.t_min = p.t_sum[6] + p.brake.duration + p.accel.duration;
             return true;
         }
 

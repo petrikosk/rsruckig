@@ -64,7 +64,7 @@ impl VelocityThirdOrderStep2 {
                 a_max,
                 a_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -89,7 +89,7 @@ impl VelocityThirdOrderStep2 {
                 a_max,
                 a_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -111,7 +111,7 @@ impl VelocityThirdOrderStep2 {
                 a_max,
                 a_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -139,7 +139,7 @@ impl VelocityThirdOrderStep2 {
                 a_max,
                 a_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -165,7 +165,7 @@ impl VelocityThirdOrderStep2 {
                 a_max,
                 a_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }

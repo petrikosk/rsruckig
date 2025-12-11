@@ -281,6 +281,22 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         traj: &mut Trajectory<DOF>,
         delta_time: f64,
     ) -> Result<RuckigResult, RuckigError> {
+        // Initialize per-dof control interface and synchronization once before the loop
+        for i in 0..self.degrees_of_freedom {
+            self.inp_per_dof_control_interface[i] = inp.control_interface;
+            self.inp_per_dof_synchronization[i] = inp.synchronization;
+        }
+        if let Some(per_dof_control_interface) = &inp.per_dof_control_interface {
+            for (i, value) in per_dof_control_interface.iter().enumerate() {
+                self.inp_per_dof_control_interface[i] = *value;
+            }
+        }
+        if let Some(per_dof_synchronization) = &inp.per_dof_synchronization {
+            for (i, value) in per_dof_synchronization.iter().enumerate() {
+                self.inp_per_dof_synchronization[i] = *value;
+            }
+        }
+
         for dof in 0..self.degrees_of_freedom {
             let p = &mut traj.profiles[0][dof];
 
@@ -294,41 +310,21 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                 .as_ref()
                 .map_or(-inp.max_acceleration[dof], |v| v[dof]);
 
-            self.inp_per_dof_control_interface =
-                DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.control_interface.clone());
-            if let Some(per_dof_control_interface) = &inp.per_dof_control_interface {
-                for (dof, value) in per_dof_control_interface.iter().enumerate() {
-                    *self.inp_per_dof_control_interface.get_mut(dof).unwrap() = value.clone();
-                }
-            }
-
-            self.inp_per_dof_synchronization =
-                DataArrayOrVec::new(Some(self.degrees_of_freedom), inp.synchronization.clone());
-            if let Some(per_dof_synchronization) = &inp.per_dof_synchronization {
-                for (dof, value) in per_dof_synchronization.iter().enumerate() {
-                    *self.inp_per_dof_synchronization.get_mut(dof).unwrap() = value.clone();
-                }
-            }
-
             if !inp.enabled[dof] {
-                if let Some(last) = p.p.last_mut() {
-                    *last = inp.current_position[dof];
-                }
-                if let Some(last) = p.v.last_mut() {
-                    *last = inp.current_velocity[dof];
-                }
-                if let Some(last) = p.a.last_mut() {
-                    *last = inp.current_acceleration[dof];
-                }
-                if let Some(last) = p.t_sum.last_mut() {
-                    *last = 0.0;
-                }
+                p.p[7] = inp.current_position[dof];
+                p.v[7] = inp.current_velocity[dof];
+                p.a[7] = inp.current_acceleration[dof];
+                p.t_sum[6] = 0.0;
 
                 self.blocks[dof].t_min = 0.0;
                 self.blocks[dof].a = None;
                 self.blocks[dof].b = None;
                 continue;
             }
+
+            // Use cached min values
+            let min_vel = self.inp_min_velocity[dof];
+            let min_acc = self.inp_min_acceleration[dof];
 
             // Calculate brake (if input exceeds or will exceed limits)
             match self.inp_per_dof_control_interface[dof] {
@@ -338,43 +334,27 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             inp.current_velocity[dof],
                             inp.current_acceleration[dof],
                             inp.max_velocity[dof],
-                            inp.min_velocity
-                                .as_ref()
-                                .and_then(|v| v.get(dof))
-                                .cloned()
-                                .unwrap_or(-inp.max_velocity[dof]),
+                            min_vel,
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .and_then(|v| v.get(dof))
-                                .cloned()
-                                .unwrap_or(-inp.max_acceleration[dof]),
+                            min_acc,
                             inp.max_jerk[dof],
                         );
                     } else if !inp.max_acceleration[dof].is_infinite() {
                         p.brake.get_second_order_position_brake_trajectory(
                             inp.current_velocity[dof],
                             inp.max_velocity[dof],
-                            inp.min_velocity
-                                .as_ref()
-                                .and_then(|v| v.get(dof))
-                                .cloned()
-                                .unwrap_or(-inp.max_velocity[dof]),
+                            min_vel,
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .and_then(|v| v.get(dof))
-                                .cloned()
-                                .unwrap_or(-inp.max_acceleration[dof]),
+                            min_acc,
                         );
                     }
                     p.set_boundary(
-                        &inp.current_position[dof],
-                        &inp.current_velocity[dof],
-                        &inp.current_acceleration[dof],
-                        &inp.target_position[dof],
-                        &inp.target_velocity[dof],
-                        &inp.target_acceleration[dof],
+                        inp.current_position[dof],
+                        inp.current_velocity[dof],
+                        inp.current_acceleration[dof],
+                        inp.target_position[dof],
+                        inp.target_velocity[dof],
+                        inp.target_acceleration[dof],
                     );
                 }
                 ControlInterface::Velocity => {
@@ -382,11 +362,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                         p.brake.get_velocity_brake_trajectory(
                             inp.current_acceleration[dof],
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .and_then(|v| v.get(dof))
-                                .cloned()
-                                .unwrap_or(-inp.max_acceleration[dof]),
+                            min_acc,
                             inp.max_jerk[dof],
                         );
                     } else {
@@ -422,13 +398,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             p.vf,
                             p.af,
                             inp.max_velocity[dof],
-                            inp.min_velocity
-                                .as_ref()
-                                .map_or(-inp.max_velocity[dof], |v| v[dof]),
+                            min_vel,
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .map_or(-inp.max_acceleration[dof], |v| v[dof]),
+                            min_acc,
                             inp.max_jerk[dof],
                         );
                         found_profile = step1.get_profile(p, &mut self.blocks[dof]);
@@ -439,13 +411,9 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             p.pf,
                             p.vf,
                             inp.max_velocity[dof],
-                            inp.min_velocity
-                                .as_ref()
-                                .map_or(-inp.max_velocity[dof], |v| v[dof]),
+                            min_vel,
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .map_or(-inp.max_acceleration[dof], |v| v[dof]),
+                            min_acc,
                         );
                         found_profile = step1.get_profile(p, &mut self.blocks[dof]);
                     } else {
@@ -453,9 +421,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             p.p[0],
                             p.pf,
                             inp.max_velocity[dof],
-                            inp.min_velocity
-                                .as_ref()
-                                .map_or(-inp.max_velocity[dof], |v| v[dof]),
+                            min_vel,
                         );
                         found_profile = step1.get_profile(p, &mut self.blocks[dof]);
                     }
@@ -468,9 +434,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             p.vf,
                             p.af,
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .map_or(-inp.max_acceleration[dof], |v| v[dof]),
+                            min_acc,
                             inp.max_jerk[dof],
                         );
                         found_profile = step1.get_profile(p, &mut self.blocks[dof]);
@@ -479,9 +443,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                             p.v[0],
                             p.vf,
                             inp.max_acceleration[dof],
-                            inp.min_acceleration
-                                .as_ref()
-                                .map_or(-inp.max_acceleration[dof], |v| v[dof]),
+                            min_acc,
                         );
                         found_profile = step1.get_profile(p, &mut self.blocks[dof]);
                     }
@@ -491,11 +453,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
             if !found_profile {
                 let has_zero_limits = inp.max_acceleration[dof] == 0.0
-                    || inp
-                        .min_acceleration
-                        .as_ref()
-                        .map_or(-inp.max_acceleration[dof], |v| v[dof])
-                        == 0.0
+                    || min_acc == 0.0
                     || inp.max_jerk[dof] == 0.0;
                 if has_zero_limits {
                     T::handle_calculator_error(

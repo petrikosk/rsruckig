@@ -31,7 +31,7 @@ use crate::alloc::format;
 /// // For velocity control (e.g., for visual servoing)
 /// input.control_interface = ControlInterface::Velocity;
 /// ```
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum ControlInterface {
     /// Full kinematic state control (position, velocity, acceleration)
     #[default]
@@ -68,7 +68,7 @@ pub enum ControlInterface {
 /// // For independent, time-optimal profiles for each DoF
 /// input.synchronization = Synchronization::None;
 /// ```
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum Synchronization {
     /// All DoFs reach their target at the same time (default)
     #[default]

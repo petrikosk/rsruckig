@@ -34,14 +34,14 @@ pub enum ReachedLimits {
     None,
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum Direction {
     #[default]
     UP,
     DOWN,
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum ControlSigns {
     #[default]
     UDDU,
@@ -72,7 +72,7 @@ pub struct Bound {
 ///
 /// This is a low-level representation used internally by the algorithm, but
 /// exposed for advanced use cases.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Profile {
     /// Duration of each phase (up to 7 phases)
     pub t: [f64; 7],
@@ -319,7 +319,7 @@ impl Profile {
             && self.check_for_second_order_velocity_with_timing(_tf, control_signs, limits, a_up)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn check(
         &mut self,
         control_signs: ControlSigns,
@@ -530,19 +530,19 @@ impl Profile {
     #[inline]
     pub fn set_boundary(
         &mut self,
-        p0_new: &f64,
-        v0_new: &f64,
-        a0_new: &f64,
-        pf_new: &f64,
-        vf_new: &f64,
-        af_new: &f64,
+        p0_new: f64,
+        v0_new: f64,
+        a0_new: f64,
+        pf_new: f64,
+        vf_new: f64,
+        af_new: f64,
     ) {
-        self.a[0] = *a0_new;
-        self.v[0] = *v0_new;
-        self.p[0] = *p0_new;
-        self.af = *af_new;
-        self.vf = *vf_new;
-        self.pf = *pf_new;
+        self.a[0] = a0_new;
+        self.v[0] = v0_new;
+        self.p[0] = p0_new;
+        self.af = af_new;
+        self.vf = vf_new;
+        self.pf = pf_new;
     }
 
     #[inline]

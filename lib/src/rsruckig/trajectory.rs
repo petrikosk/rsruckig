@@ -82,11 +82,13 @@ impl<const DOF: usize> Trajectory<DOF> {
             return;
         }
 
-        let new_section_index = self
-            .cumulative_times
-            .iter()
-            .position(|&t| t > time)
-            .unwrap_or(self.cumulative_times.len());
+        let mut new_section_index = self.cumulative_times.len();
+        for i in 0..self.cumulative_times.len() {
+            if self.cumulative_times[i] > time {
+                new_section_index = i;
+                break;
+            }
+        }
         *new_section = new_section_index;
         let mut t_diff = time;
         if new_section_index > 0 {
@@ -129,11 +131,13 @@ impl<const DOF: usize> Trajectory<DOF> {
                 continue;
             }
 
-            let index_dof = p
-                .t_sum
-                .iter()
-                .position(|&t| t > t_diff_dof)
-                .unwrap_or(p.t_sum.len() - 1);
+            let mut index_dof = 6; // t_sum has 7 elements, default to last
+            for i in 0..7 {
+                if p.t_sum[i] > t_diff_dof {
+                    index_dof = i;
+                    break;
+                }
+            }
 
             if index_dof > 0 {
                 t_diff_dof -= p.t_sum[index_dof - 1];

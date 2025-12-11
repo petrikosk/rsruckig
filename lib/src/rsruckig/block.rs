@@ -13,13 +13,14 @@ pub struct Block {
     pub b: Option<Interval>,
 }
 
+#[inline]
 pub fn remove_profile(
     valid_profiles: &mut [Profile; 6],
     valid_profile_counter: &mut usize,
     index: usize,
 ) {
     for i in index..(*valid_profile_counter - 1) {
-        valid_profiles[i] = valid_profiles[i + 1].clone();
+        valid_profiles[i] = valid_profiles[i + 1];
     }
     *valid_profile_counter -= 1;
 }
@@ -35,6 +36,7 @@ impl Block {
         self.b = None;
     }
 
+    #[inline]
     pub fn calculate_block(
         block: &mut Block,
         valid_profiles: &mut [Profile; 6],
@@ -153,23 +155,35 @@ impl Block {
 
     #[inline]
     pub fn is_blocked(&self, t: f64) -> bool {
-        (t < self.t_min)
-            || (self.a.is_some()
-                && t > self.a.as_ref().unwrap().left
-                && t < self.a.as_ref().unwrap().right)
-            || (self.b.is_some()
-                && t > self.b.as_ref().unwrap().left
-                && t < self.b.as_ref().unwrap().right)
+        if t < self.t_min {
+            return true;
+        }
+        if let Some(a) = &self.a {
+            if t > a.left && t < a.right {
+                return true;
+            }
+        }
+        if let Some(b) = &self.b {
+            if t > b.left && t < b.right {
+                return true;
+            }
+        }
+        false
     }
 
+    #[inline]
     pub fn get_profile(&self, t: f64) -> &Profile {
-        if self.b.is_some() && t >= self.b.as_ref().unwrap().right {
-            &self.b.as_ref().unwrap().profile
-        } else if self.a.is_some() && t >= self.a.as_ref().unwrap().right {
-            &self.a.as_ref().unwrap().profile
-        } else {
-            &self.p_min
+        if let Some(b) = &self.b {
+            if t >= b.right {
+                return &b.profile;
+            }
         }
+        if let Some(a) = &self.a {
+            if t >= a.right {
+                return &a.profile;
+            }
+        }
+        &self.p_min
     }
 }
 

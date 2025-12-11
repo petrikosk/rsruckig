@@ -79,7 +79,7 @@ impl PositionSecondOrderStep2 {
                 v_max,
                 v_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -105,7 +105,7 @@ impl PositionSecondOrderStep2 {
                 v_max,
                 v_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -128,7 +128,7 @@ impl PositionSecondOrderStep2 {
                 v_max,
                 v_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -165,7 +165,7 @@ impl PositionSecondOrderStep2 {
                 v_max,
                 v_min,
             ) {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
@@ -195,7 +195,7 @@ impl PositionSecondOrderStep2 {
                     v_min,
                 )
             {
-                profile.pf = *profile.p.last().unwrap();
+                profile.pf = profile.p[7];
                 return true;
             }
         }
