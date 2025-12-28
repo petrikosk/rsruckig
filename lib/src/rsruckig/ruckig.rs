@@ -72,7 +72,7 @@ use crate::alloc::format;
 /// // Heap allocation (3 DoF)
 /// let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(3), 0.01);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
     current_input: InputParameter<DOF>,
     current_input_initialized: bool,

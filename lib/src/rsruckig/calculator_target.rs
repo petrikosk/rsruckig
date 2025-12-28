@@ -21,7 +21,7 @@ use crate::{
 
 use crate::alloc::{vec, vec::Vec, format};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TargetCalculator<const DOF: usize> {
     eps: f64,
     return_error_at_maximal_duration: bool,

@@ -95,7 +95,7 @@ pub trait RuckigErrorHandler {
     fn handle_calculator_error(message: &str) -> Result<(), RuckigError>;
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ThrowErrorHandler;
 
 impl RuckigErrorHandler for ThrowErrorHandler {
