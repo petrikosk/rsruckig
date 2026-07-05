@@ -1224,3 +1224,49 @@ fn test_mixed_signs_phase_sync() {
 
     assert_eq!(dof0_profile.t, dof1_profile.t);
 }
+
+#[test]
+fn test_degenerate_boundary_state() {
+    // Regression test (GitHub issue): boundary states lying exactly on the
+    // velocity-at-zero-acceleration curve (v0 == a0²/(2·j_max) and
+    // vf == af²/(2·j_max)) made two step-1 profile families produce the same
+    // degenerate profile with the same direction. The duplicate was not
+    // merged, leaving an even profile count and failing the calculation.
+    let p0 = 1.1032599505208334;
+    let v0 = 0.36337812500000005;
+    let a0 = 0.8525;
+    let pf = 2.9033375720687795;
+    let vf = 0.3477303818980908;
+    let af = -0.833942902;
+
+    // The exact input and tiny perturbations around the degeneracy must all solve
+    let perturbations: [(f64, f64, f64, f64, f64, f64); 7] = [
+        (0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        (1e-12, 0.0, 0.0, 0.0, 0.0, 0.0),
+        (0.0, 1e-12, 0.0, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 1e-12, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.0, 0.0, 1e-12, 0.0),
+        (0.0, 0.0, 0.0, 0.0, 0.0, 1e-12),
+        (0.0, 0.0, 0.0, 0.0, 0.0, -1e-12),
+    ];
+
+    for (i, (dp0, dv0, da0, dpf, dvf, daf)) in perturbations.iter().enumerate() {
+        let mut input = InputParameter::<1>::new(None);
+        input.synchronization = Synchronization::None;
+        input.current_position = DataArrayOrVec::Stack([p0 + dp0]);
+        input.current_velocity = DataArrayOrVec::Stack([v0 + dv0]);
+        input.current_acceleration = DataArrayOrVec::Stack([a0 + da0]);
+        input.target_position = DataArrayOrVec::Stack([pf + dpf]);
+        input.target_velocity = DataArrayOrVec::Stack([vf + dvf]);
+        input.target_acceleration = DataArrayOrVec::Stack([af + daf]);
+        input.max_velocity = DataArrayOrVec::Stack([1.0]);
+        input.max_acceleration = DataArrayOrVec::Stack([1.0]);
+        input.max_jerk = DataArrayOrVec::Stack([1.0]);
+
+        let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+        let mut traj = Trajectory::<1>::new(None);
+        let result = otg.calculate(&input, &mut traj);
+        assert!(result.is_ok(), "perturbation {i} failed: {result:?}");
+        assert_float_eq!(traj.get_duration(), 2.313557098, abs <= 1e-6);
+    }
+}

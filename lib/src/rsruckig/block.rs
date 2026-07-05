@@ -74,25 +74,48 @@ impl Block {
             }
             // Only happens due to numerical issues
         } else if *valid_profile_counter == 4 {
-            // Find "identical" profiles
+            // Find "identical" profiles. Note that the last pair does not
+            // compare directions: a degenerate profile (e.g. with a zero-width
+            // velocity plateau) can duplicate a profile of the same direction
+            // from another family (matches upstream C++ behavior).
             if f64::abs(
                 valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6],
             ) < 32.0 * f64::EPSILON
                 && valid_profiles[0].direction != valid_profiles[1].direction
             {
                 remove_profile(valid_profiles, valid_profile_counter, 1);
-            } else if (f64::abs(
+            } else if f64::abs(
                 valid_profiles[2].t_sum[6] - valid_profiles[3].t_sum[6],
             ) < 256.0 * f64::EPSILON
-                && valid_profiles[2].direction != valid_profiles[3].direction)
-                || (f64::abs(
-                    valid_profiles[0].t_sum[6] - valid_profiles[3].t_sum[6],
-                ) < 256.0 * f64::EPSILON
-                    && valid_profiles[0].direction != valid_profiles[3].direction)
+                && valid_profiles[2].direction != valid_profiles[3].direction
+            {
+                remove_profile(valid_profiles, valid_profile_counter, 3);
+            } else if f64::abs(
+                valid_profiles[0].t_sum[6] - valid_profiles[3].t_sum[6],
+            ) < 256.0 * f64::EPSILON
             {
                 remove_profile(valid_profiles, valid_profile_counter, 3);
             } else {
-                return false;
+                // Fallback for numerically degenerate inputs (e.g. boundary
+                // states exactly on the velocity-at-zero-acceleration curve):
+                // two profiles from different families with essentially
+                // identical durations describe the same solution, and the
+                // interval between them would be degenerate anyway.
+                let mut removed = false;
+                'outer: for i in 0..4 {
+                    for j in (i + 1)..4 {
+                        let ti = valid_profiles[i].t_sum[6];
+                        let tj = valid_profiles[j].t_sum[6];
+                        if f64::abs(ti - tj) < 1e-12 * (1.0 + f64::abs(ti)) {
+                            remove_profile(valid_profiles, valid_profile_counter, j);
+                            removed = true;
+                            break 'outer;
+                        }
+                    }
+                }
+                if !removed {
+                    return false;
+                }
             }
         } else if *valid_profile_counter % 2 == 0 {
             return false;
