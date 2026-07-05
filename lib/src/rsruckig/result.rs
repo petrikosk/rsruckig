@@ -47,7 +47,9 @@ pub enum RuckigResult {
     /// The trajectory duration exceeds its numerical limits
     ErrorTrajectoryDuration = -101,
     
-    /// The trajectory exceeds the given positional limits (only in Ruckig Pro)
+    /// The trajectory exceeds the given positional limits
+    /// (`InputParameter::min_position` / `max_position`) and no compliant
+    /// profile could be found
     ErrorPositionalLimits = -102,
     
     /// The trajectory is not valid due to a conflict with zero limits

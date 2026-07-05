@@ -28,7 +28,7 @@ fn v_at_a_zero(v0: f64, a0: f64, j: f64) -> f64 {
 /// The stop profile is the time- and distance-optimal three-phase profile:
 /// jerk -j_max until the peak deceleration, optional hold, jerk +j_max back to zero
 /// so that v reaches 0 exactly when a reaches 0.
-pub(crate) fn stop_distance_third_order(v: f64, a: f64, a_min: f64, j_max: f64) -> f64 {
+pub fn stop_distance_third_order(v: f64, a: f64, a_min: f64, j_max: f64) -> f64 {
     let a_stop = a_min.abs();
     // Peak deceleration (squared) of the triangular stop profile
     let s = j_max * v + 0.5 * a * a;
@@ -67,7 +67,7 @@ pub(crate) fn stop_distance_third_order(v: f64, a: f64, a_min: f64, j_max: f64) 
 
 /// Distance traveled until a full stop from velocity `v` with acceleration bounded
 /// by `a_min` (< 0), for the second-order case (infinite jerk).
-pub(crate) fn stop_distance_second_order(v: f64, a_min: f64) -> f64 {
+pub fn stop_distance_second_order(v: f64, a_min: f64) -> f64 {
     if v <= 0.0 {
         return 0.0;
     }
@@ -77,7 +77,7 @@ pub(crate) fn stop_distance_second_order(v: f64, a_min: f64) -> f64 {
 /// Maximum velocity (with a = 0) from which a full jerk-limited stop covers a
 /// distance of at most `d`, with peak deceleration `|a_min|` and jerk `j_max`.
 /// Inverse of `stop_distance_third_order` for a = 0.
-pub(crate) fn velocity_cap_third_order(d: f64, a_min: f64, j_max: f64) -> f64 {
+pub fn velocity_cap_third_order(d: f64, a_min: f64, j_max: f64) -> f64 {
     if d <= 0.0 {
         return 0.0;
     }
@@ -95,7 +95,7 @@ pub(crate) fn velocity_cap_third_order(d: f64, a_min: f64, j_max: f64) -> f64 {
 
 /// Maximum velocity from which a stop with acceleration `|a_min|` covers at most `d`
 /// (second-order case, infinite jerk).
-pub(crate) fn velocity_cap_second_order(d: f64, a_min: f64) -> f64 {
+pub fn velocity_cap_second_order(d: f64, a_min: f64) -> f64 {
     if d <= 0.0 {
         return 0.0;
     }

@@ -5,7 +5,9 @@
   </h3>
 </div>
 
-This is a Rust port of the repository https://github.com/pantor/ruckig/. Cloud client and pro-features are not ported. The
+This is a Rust port of the repository https://github.com/pantor/ruckig/. Cloud client and most pro-features are not
+ported. However, this port implements its own equivalents of two Ruckig Pro features: **position limits**
+(`min_position` / `max_position`) and a **tracking interface** (`Trackig`) for following a moving target signal. The
 examples use Gnuplot to illustrate the trajectories.
 
 Ruckig generates trajectories on-the-fly, allowing robots and machines to react instantaneously to sensor input. Ruckig
@@ -23,7 +25,9 @@ accepted for the _Robotics: Science and Systems (RSS), 2021_ conference.
 
 - **Real-time Trajectory Generation**: Generate trajectories on-the-fly for robots and machines.
 - **Jerk-limited Motion**: Ensures smooth motion by limiting jerk.
-- **Waypoint-based Trajectory Generation**: Supports intermediate waypoints for complex paths.
+- **Position Limits**: Restrict the workspace with `min_position` / `max_position` - the generated trajectory is
+  guaranteed to stay inside the limits, or a `ErrorPositionalLimits` result is returned (never a silent violation).
+- **Tracking Interface**: Follow a moving target signal with the `Trackig` struct under full kinematic constraints.
 - **Customizable Error Handling**: Implement your own error handling strategies using the `RuckigErrorHandler` trait.
 - **no-std support**: Run this library on embedded systems without the standard library (still requires `alloc`)
 
@@ -285,6 +289,9 @@ max_jerk: DataArrayOrVec<f64, DOF>; // Initialized to infinity
 min_velocity: Option<DataArrayOrVec<f64, DOF>>; // If not given, the negative maximum velocity will be used.
 min_acceleration: Option<DataArrayOrVec<f64, DOF>>; // If not given, the negative maximum acceleration will be used.
 
+max_position: Option<DataArrayOrVec<f64, DOF>>; // Optional upper position limit per DoF
+min_position: Option<DataArrayOrVec<f64, DOF>>; // Optional lower position limit per DoF
+
 enabled: DataArrayOrVec<bool, DOF>; // Initialized to true
 minimum_duration: Option<f64>;
 
@@ -315,6 +322,8 @@ On top of the current state, target state, and constraints, Ruckig allows for a 
   results in straight-line motions.
 - The trajectory duration might be constrained to a multiple of the control cycle. This way, the _exact_ state can be
   reached at a control loop execution.
+- _Position limits_ (`min_position` / `max_position`) restrict the workspace of the system. See the section below for
+  details.
 
 ### Input Validation
 
@@ -407,6 +416,68 @@ result = ruckig.calculate(input, trajectory); // Returns  Result<RuckigResult, R
 
 When only using this method, the `Ruckig` constructor does not need a control cycle (`delta_time`) as an argument.
 However if given, Ruckig supports stepping through the trajectory with
+
+### Position Limits
+
+Optional per-DoF position limits restrict the workspace of the system:
+
+```rust
+input.min_position = Some(daov_stack![-1.0]);
+input.max_position = Some(daov_stack![1.0]);
+// Use f64::INFINITY / f64::NEG_INFINITY entries to disable the limit for individual DoFs
+```
+
+The generated trajectory is guaranteed to stay inside the limits: candidate profiles are checked against their exact
+position extrema, and if needed, the effective velocity limits of the affected DoF are reduced so that a full
+(jerk-limited) stop always fits inside the remaining distance to the limit. The check also requires the trajectory's
+end state to leave enough stopping margin, so the system can always stay inside the workspace afterwards. With the
+velocity control interface, the effective target velocity is capped accordingly.
+
+If the current kinematic state makes crossing a limit unavoidable (e.g. too fast, too close to the limit), the best
+possible braking is applied and `RuckigResult::ErrorPositionalLimits` (-102) is returned - a violation is never
+silent. Input validation also catches target states outside the limits and current/target states from which a stop
+inside the limits is impossible.
+
+See `samples/src/example_position_limits_1dof.rs` for a complete example.
+
+### Tracking a Moving Target (Trackig)
+
+The `Trackig` struct follows a moving target signal as closely as the kinematic limits allow (the equivalent of the
+Ruckig Pro tracking interface, implemented independently). Every control cycle, the state-to-state calculation is
+re-run from the current state toward the instantaneous target:
+
+```rust
+use rsruckig::prelude::*;
+
+let mut otg = Trackig::<1, IgnoreErrorHandler>::new(None, 0.001);
+let mut input = InputParameter::new(None);
+let mut output = OutputParameter::new(None);
+input.synchronization = Synchronization::None; // recommended for tracking
+input.max_velocity[0] = 3.0;
+input.max_acceleration[0] = 15.0;
+input.max_jerk[0] = 150.0;
+
+let mut target = TargetState::new(None);
+loop {
+    // target.position[0] = ...; target.velocity[0] = ...; target.acceleration[0] = ...;
+    let _ = otg.update(&target, &input, &mut output)?;
+    output.pass_to_input(&mut input);
+    // Use output.new_position / new_velocity / new_acceleration as setpoints
+}
+```
+
+Properties:
+
+- Unreachable targets are clamped into the reachable set: a target moving faster than the limits allow makes the
+  output lag behind at maximum velocity instead of producing errors.
+- Position limits (see above) compose with tracking: the target is clamped into the limits, in both arrival
+  directions.
+- If a cycle still fails numerically, the last successfully calculated trajectory is followed (never extrapolated
+  past its end).
+- The steady-state cycle is allocation-free for stack-allocated DoFs.
+- An optional first-order low-pass filter (`target_filter_time_constant`) smooths noisy target signals.
+
+See `samples/src/example_tracking_1dof.rs` for a complete example.
 
 ```rust
 while ruckig.update(&input, &mut output).unwrap() == RuckigResult::Working {
