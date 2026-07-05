@@ -320,14 +320,28 @@ impl<const DOF: usize> TargetCalculator<DOF> {
     /// Returns (upper_limit_violated, lower_limit_violated). Besides the extrema
     /// of the profile itself, the end state must leave enough margin for a full
     /// stop inside the limits, so that the system can always stay in the workspace.
+    /// Start position of a profile, including a possible brake pre-trajectory
+    #[inline]
+    fn profile_start_position(profile: &Profile) -> f64 {
+        if profile.brake.duration > 0.0 {
+            profile.brake.p[0]
+        } else {
+            profile.p[0]
+        }
+    }
+
     fn profile_position_violations(
         &self,
         dof: usize,
         inp: &InputParameter<DOF>,
         profile: &Profile,
     ) -> (bool, bool) {
-        let max_pos = self.inp_max_position[dof];
-        let min_pos = self.inp_min_position[dof];
+        // If the current position already lies outside the limits, the
+        // trajectory back inside is still allowed - it must only never move
+        // further outside than its start
+        let p_start = Self::profile_start_position(profile);
+        let max_pos = self.inp_max_position[dof].max(p_start);
+        let min_pos = self.inp_min_position[dof].min(p_start);
         let tol_up = Self::position_limit_tolerance(max_pos);
         let tol_down = Self::position_limit_tolerance(min_pos);
 
@@ -346,8 +360,11 @@ impl<const DOF: usize> TargetCalculator<DOF> {
     /// position limits. Returns (upper_violated, lower_violated) over all of them,
     /// as the synchronization may select any of the block profiles later on.
     fn block_position_violations(&self, dof: usize) -> (bool, bool) {
-        let max_pos = self.inp_max_position[dof];
-        let min_pos = self.inp_min_position[dof];
+        // All block profiles share the same start state (see
+        // profile_position_violations for the rationale of relaxing by it)
+        let p_start = Self::profile_start_position(&self.blocks[dof].p_min);
+        let max_pos = self.inp_max_position[dof].max(p_start);
+        let min_pos = self.inp_min_position[dof].min(p_start);
         let tol_up = Self::position_limit_tolerance(max_pos);
         let tol_down = Self::position_limit_tolerance(min_pos);
 
