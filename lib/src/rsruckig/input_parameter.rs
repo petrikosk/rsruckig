@@ -4,6 +4,7 @@
 //! target state, and kinematic constraints like velocity, acceleration, and jerk limits.
 //! It also provides options for customizing the generation process.
 
+use crate::brake::{stop_distance_second_order, stop_distance_third_order};
 use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::util::{join, DataArrayOrVec};
 use core::fmt;
@@ -175,6 +176,12 @@ pub struct InputParameter<const DOF: usize> {
     pub min_velocity: Option<DataArrayOrVec<f64, DOF>>,
     /// Minimum acceleration limit for each DoF (negative values). If None, negative of max_acceleration is used.
     pub min_acceleration: Option<DataArrayOrVec<f64, DOF>>,
+    /// Maximum position limit for each DoF. If None, no upper position limit is applied.
+    /// Use `f64::INFINITY` entries to disable the limit for individual DoFs.
+    pub max_position: Option<DataArrayOrVec<f64, DOF>>,
+    /// Minimum position limit for each DoF. If None, no lower position limit is applied.
+    /// Use `f64::NEG_INFINITY` entries to disable the limit for individual DoFs.
+    pub min_position: Option<DataArrayOrVec<f64, DOF>>,
     /// Whether each DoF is enabled in the calculation
     pub enabled: DataArrayOrVec<bool, DOF>,
     /// Sets the control interface for each DoF individually, overwrites global control_interface
@@ -202,6 +209,8 @@ impl<const DOF: usize> PartialEq for InputParameter<DOF> {
             && self.minimum_duration == other.minimum_duration
             && self.min_velocity == other.min_velocity
             && self.min_acceleration == other.min_acceleration
+            && self.max_position == other.max_position
+            && self.min_position == other.min_position
             && self.control_interface == other.control_interface
             && self.synchronization == other.synchronization
             && self.duration_discretization == other.duration_discretization
@@ -235,6 +244,8 @@ impl<const DOF: usize> InputParameter<DOF> {
             enabled: DataArrayOrVec::<bool, DOF>::new(dofs, true),
             min_velocity: None,
             min_acceleration: None,
+            max_position: None,
+            min_position: None,
             per_dof_control_interface: None,
             per_dof_synchronization: None,
             minimum_duration: None,
@@ -273,6 +284,30 @@ impl<const DOF: usize> InputParameter<DOF> {
             };
             if a_min.is_nan() || a_min > 0.0 {
                 return E::handle_validation_error(&format!("minimum acceleration limit {} of DoF {} should be smaller than or equal to zero.", a_min, dof));
+            }
+
+            let max_pos = match &self.max_position {
+                Some(mp) => mp[dof],
+                None => f64::INFINITY,
+            };
+            let min_pos = match &self.min_position {
+                Some(mp) => mp[dof],
+                None => f64::NEG_INFINITY,
+            };
+            let position_limits_set = self.max_position.is_some() || self.min_position.is_some();
+            if position_limits_set {
+                if max_pos.is_nan() || min_pos.is_nan() {
+                    return E::handle_validation_error(&format!(
+                        "position limits [{}, {}] of DoF {} should be valid numbers.",
+                        min_pos, max_pos, dof
+                    ));
+                }
+                if min_pos > max_pos {
+                    return E::handle_validation_error(&format!(
+                        "minimum position limit {} of DoF {} should be smaller than or equal to its maximum position limit {}.",
+                        min_pos, dof, max_pos
+                    ));
+                }
             }
 
             let a0: f64 = self.current_acceleration[dof];
@@ -414,6 +449,72 @@ impl<const DOF: usize> InputParameter<DOF> {
                         return E::handle_validation_error(&format!("DoF {} will inevitably have reached a velocity {} from the target kinematic state that will undercut its minimum velocity limit {}.", dof, InputParameter::<DOF>::v_at_a_zero(vf, af, -j_max), v_min));
                     }
                 }
+
+                if position_limits_set {
+                    let a_min = match &self.min_acceleration {
+                        Some(min_acc) => min_acc[dof],
+                        None => -a_max,
+                    };
+                    let stop_distances = |v: f64, a: f64| -> (f64, f64) {
+                        if j_max > 0.0 && j_max.is_finite() {
+                            (
+                                stop_distance_third_order(v, a, a_min, j_max),
+                                stop_distance_third_order(-v, -a, a_max, j_max),
+                            )
+                        } else if a_max.is_finite() || a_min.is_finite() {
+                            (
+                                stop_distance_second_order(v, a_min),
+                                stop_distance_second_order(-v, a_max),
+                            )
+                        } else {
+                            // First-order profiles are monotone: no overshoot possible
+                            (0.0, 0.0)
+                        }
+                    };
+
+                    if check_target_state_within_limits {
+                        if pf > max_pos {
+                            return E::handle_validation_error(&format!("target position {} of DoF {} exceeds its maximum position limit {}.", pf, dof, max_pos));
+                        }
+                        if pf < min_pos {
+                            return E::handle_validation_error(&format!("target position {} of DoF {} undercuts its minimum position limit {}.", pf, dof, min_pos));
+                        }
+
+                        let (stop_up, stop_down) = stop_distances(vf, af);
+                        if stop_up > max_pos - pf {
+                            return E::handle_validation_error(&format!("DoF {} will inevitably travel a stopping distance {} from the target kinematic state that will exceed its maximum position limit {}.", dof, stop_up, max_pos));
+                        }
+                        if stop_down > pf - min_pos {
+                            return E::handle_validation_error(&format!("DoF {} will inevitably travel a stopping distance {} from the target kinematic state that will undercut its minimum position limit {}.", dof, stop_down, min_pos));
+                        }
+                    }
+                    if check_current_state_within_limits {
+                        if p0 > max_pos {
+                            return E::handle_validation_error(&format!("current position {} of DoF {} exceeds its maximum position limit {}.", p0, dof, max_pos));
+                        }
+                        if p0 < min_pos {
+                            return E::handle_validation_error(&format!("current position {} of DoF {} undercuts its minimum position limit {}.", p0, dof, min_pos));
+                        }
+
+                        // Inevitable-crossing guard: even the hardest brake must fit
+                        // inside the remaining distance to the position limits.
+                        let (stop_up, stop_down) = stop_distances(v0, a0);
+                        if stop_up > max_pos - p0 {
+                            return E::handle_validation_error(&format!("DoF {} will inevitably travel a stopping distance {} from the current kinematic state that will exceed its maximum position limit {}.", dof, stop_up, max_pos));
+                        }
+                        if stop_down > p0 - min_pos {
+                            return E::handle_validation_error(&format!("DoF {} will inevitably travel a stopping distance {} from the current kinematic state that will undercut its minimum position limit {}.", dof, stop_down, min_pos));
+                        }
+                    }
+                }
+            } else if position_limits_set && check_current_state_within_limits {
+                let p0 = self.current_position[dof];
+                if p0 > max_pos {
+                    return E::handle_validation_error(&format!("current position {} of DoF {} exceeds its maximum position limit {}.", p0, dof, max_pos));
+                }
+                if p0 < min_pos {
+                    return E::handle_validation_error(&format!("current position {} of DoF {} undercuts its minimum position limit {}.", p0, dof, min_pos));
+                }
             }
         }
         Ok(())
@@ -497,6 +598,20 @@ impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
                 f,
                 "inp.min_acceleration = [{}]",
                 join::<DOF>(min_acc.deref(), true)
+            )?;
+        }
+        if let Some(max_pos) = &self.max_position {
+            writeln!(
+                f,
+                "inp.max_position = [{}]",
+                join::<DOF>(max_pos.deref(), true)
+            )?;
+        }
+        if let Some(min_pos) = &self.min_position {
+            writeln!(
+                f,
+                "inp.min_position = [{}]",
+                join::<DOF>(min_pos.deref(), true)
             )?;
         }
 
