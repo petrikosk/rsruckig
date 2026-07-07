@@ -24,6 +24,14 @@ path = "src/example_1dof_custom_error.rs"
 name = "example_position_3_dynamic_dof"
 path = "src/example_position_3_dynamic_dof.rs"
 
+[[bin]]
+name = "example_position_limits_1dof"
+path = "src/example_position_limits_1dof.rs"
+
+[[bin]]
+name = "example_tracking_1dof"
+path = "src/example_tracking_1dof.rs"
+
 
 [dependencies]
 rsruckig = { path = "../lib" }

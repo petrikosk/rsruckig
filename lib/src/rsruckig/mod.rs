@@ -72,6 +72,7 @@ pub mod profile;
 pub mod result;
 pub mod roots;
 pub mod ruckig;
+pub mod trackig;
 pub mod trajectory;
 pub mod util;
 pub mod velocity_second_step1;
@@ -90,6 +91,7 @@ pub mod prelude {
     pub use super::profile::Profile;
     pub use super::result::RuckigResult;
     pub use super::ruckig::Ruckig;
+    pub use super::trackig::{TargetState, Trackig};
     pub use super::trajectory::Trajectory;
     pub use super::util::DataArrayOrVec;
 

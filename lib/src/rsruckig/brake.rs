@@ -21,6 +21,87 @@ fn v_at_a_zero(v0: f64, a0: f64, j: f64) -> f64 {
     v0 + (a0 * a0) / (2.0 * j)
 }
 
+/// Exact distance traveled until a full stop (v = 0, a = 0) from state (v, a),
+/// decelerating with peak acceleration bounded by `a_min` (<= 0) and jerk bounded
+/// by `j_max` (> 0, finite). Returns 0.0 if the state never moves forward.
+///
+/// The stop profile is the time- and distance-optimal three-phase profile:
+/// jerk -j_max until the peak deceleration, optional hold, jerk +j_max back to zero
+/// so that v reaches 0 exactly when a reaches 0.
+pub fn stop_distance_third_order(v: f64, a: f64, a_min: f64, j_max: f64) -> f64 {
+    let a_stop = a_min.abs();
+    // Peak deceleration (squared) of the triangular stop profile
+    let s = j_max * v + 0.5 * a * a;
+    if s <= 0.0 {
+        // Velocity never becomes positive: no forward travel
+        return 0.0;
+    }
+
+    if a < 0.0 && s <= a * a {
+        // Already decelerating harder than the triangular peak: v hits 0 while
+        // ramping a back to zero with jerk +j_max. Distance until v = 0.
+        let disc = a * a - 2.0 * j_max * v;
+        let t_stop = (-a - disc.max(0.0).sqrt()) / j_max;
+        let t_stop = t_stop.max(0.0);
+        return (v * t_stop + 0.5 * a * t_stop * t_stop
+            + j_max * t_stop * t_stop * t_stop / 6.0)
+            .max(0.0);
+    }
+
+    let a_pk_tri = s.sqrt();
+    let (a_pk, t_hold) = if a_pk_tri <= a_stop {
+        (a_pk_tri, 0.0)
+    } else {
+        let t_hold = (v + 0.5 * a * a / j_max) / a_stop - a_stop / j_max;
+        (a_stop, t_hold.max(0.0))
+    };
+
+    let t_ramp_down = ((a + a_pk) / j_max).max(0.0);
+    let t_ramp_up = a_pk / j_max;
+
+    let (p1, v1, a1) = integrate(t_ramp_down, 0.0, v, a, -j_max);
+    let (p2, v2, a2) = integrate(t_hold, p1, v1, a1, 0.0);
+    let (p3, _, _) = integrate(t_ramp_up, p2, v2, a2, j_max);
+    p3.max(0.0)
+}
+
+/// Distance traveled until a full stop from velocity `v` with acceleration bounded
+/// by `a_min` (< 0), for the second-order case (infinite jerk).
+pub fn stop_distance_second_order(v: f64, a_min: f64) -> f64 {
+    if v <= 0.0 {
+        return 0.0;
+    }
+    v * v / (2.0 * a_min.abs())
+}
+
+/// Maximum velocity (with a = 0) from which a full jerk-limited stop covers a
+/// distance of at most `d`, with peak deceleration `|a_min|` and jerk `j_max`.
+/// Inverse of `stop_distance_third_order` for a = 0.
+pub fn velocity_cap_third_order(d: f64, a_min: f64, j_max: f64) -> f64 {
+    if d <= 0.0 {
+        return 0.0;
+    }
+    let a_stop = a_min.abs();
+    // Triangular stop: d = v^(3/2) / sqrt(j_max)  =>  v = cbrt(d^2 * j_max)
+    let v_tri = (d * d * j_max).cbrt();
+    if v_tri * j_max <= a_stop * a_stop || a_stop.is_infinite() {
+        // Peak deceleration sqrt(v * j_max) stays below a_stop
+        return v_tri;
+    }
+    // Trapezoidal stop: d = v^2/(2A) + v*A/(2J)
+    let half_a2_j = 0.5 * a_stop * a_stop / j_max;
+    -half_a2_j + (half_a2_j * half_a2_j + 2.0 * a_stop * d).sqrt()
+}
+
+/// Maximum velocity from which a stop with acceleration `|a_min|` covers at most `d`
+/// (second-order case, infinite jerk).
+pub fn velocity_cap_second_order(d: f64, a_min: f64) -> f64 {
+    if d <= 0.0 {
+        return 0.0;
+    }
+    (2.0 * a_min.abs() * d).sqrt()
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BrakeProfile {
     pub duration: f64,
@@ -136,6 +217,59 @@ impl BrakeProfile {
         {
             self.velocity_brake(v0, a0, v_min, v_max, a_min, a_max, -j_max);
         }
+    }
+
+    /// Position-limit-aware variant of `get_position_brake_trajectory`: additionally
+    /// brakes when the current velocity exceeds the largest velocity from which a
+    /// full stop still fits inside the position limits.
+    #[allow(clippy::too_many_arguments)]
+    pub fn get_position_brake_trajectory_with_position_limits(
+        &mut self,
+        p0: f64,
+        v0: f64,
+        a0: f64,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+        j_max: f64,
+        min_position: f64,
+        max_position: f64,
+    ) {
+        let v_cap_up = velocity_cap_third_order(max_position - p0, a_min, j_max);
+        let v_cap_down = velocity_cap_third_order(p0 - min_position, a_max, j_max);
+        self.get_position_brake_trajectory(
+            v0,
+            a0,
+            v_max.min(v_cap_up),
+            v_min.max(-v_cap_down),
+            a_max,
+            a_min,
+            j_max,
+        );
+    }
+
+    /// Position-limit-aware variant of `get_second_order_position_brake_trajectory`.
+    pub fn get_second_order_position_brake_trajectory_with_position_limits(
+        &mut self,
+        p0: f64,
+        v0: f64,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+        min_position: f64,
+        max_position: f64,
+    ) {
+        let v_cap_up = velocity_cap_second_order(max_position - p0, a_min);
+        let v_cap_down = velocity_cap_second_order(p0 - min_position, a_max);
+        self.get_second_order_position_brake_trajectory(
+            v0,
+            v_max.min(v_cap_up),
+            v_min.max(-v_cap_down),
+            a_max,
+            a_min,
+        );
     }
 
     pub fn get_second_order_position_brake_trajectory(

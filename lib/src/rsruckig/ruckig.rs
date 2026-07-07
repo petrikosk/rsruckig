@@ -282,7 +282,10 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
         output.new_calculation = false;
 
         if !self.current_input_initialized || *input != self.current_input {
-            self.calculate(input, &mut output.trajectory)?;
+            let result = self.calculate(input, &mut output.trajectory)?;
+            if result != RuckigResult::Working {
+                return Ok(result);
+            }
 
             output.new_calculation = true;
             self.current_input = input.clone();
