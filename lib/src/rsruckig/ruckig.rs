@@ -287,6 +287,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
                 return Ok(result);
             }
 
+            output.time = 0.0; // reset sampling time for the newly calculated trajectory
             output.new_calculation = true;
             self.current_input = input.clone();
             self.current_input_initialized = true;

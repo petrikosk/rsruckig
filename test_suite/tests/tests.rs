@@ -1270,3 +1270,58 @@ fn test_degenerate_boundary_state() {
         assert_float_eq!(traj.get_duration(), 2.313557098, abs <= 1e-6);
     }
 }
+
+// Regression test for issue #16: `output.time` must be reset to zero when
+// `update()` recalculates the trajectory (e.g. on a mid-flight retarget).
+// Otherwise the new trajectory — whose time origin is the current state — is
+// sampled at the old accumulated time, causing a discontinuous position jump
+// and a premature `Finished`.
+#[test]
+fn test_time_reset_on_retarget() {
+    let dt = 0.01;
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, dt);
+    let mut input = InputParameter::<1>::new(None);
+    let mut output = OutputParameter::<1>::new(None);
+
+    input.target_position = DataArrayOrVec::Stack([1.0]);
+    input.max_velocity = DataArrayOrVec::Stack([1.0]);
+    input.max_acceleration = DataArrayOrVec::Stack([2.0]);
+    input.max_jerk = DataArrayOrVec::Stack([10.0]);
+
+    // Drive towards the first target for 50 cycles (0.5 s).
+    for _ in 0..50 {
+        otg.update(&input, &mut output).unwrap();
+        output.pass_to_input(&mut input);
+    }
+    let pos_before = output.new_position[0];
+
+    // Change the target mid-flight -> triggers recalculation inside update().
+    input.target_position = DataArrayOrVec::Stack([-1.0]);
+    let mut res = otg.update(&input, &mut output).unwrap();
+
+    // The output.time must have been reset for the new trajectory.
+    assert_float_eq!(output.time, dt, abs <= 1e-12);
+    assert!(output.new_calculation);
+
+    // No discontinuous jump: within one cycle the position may not move faster
+    // than max_velocity * dt (= 0.01) by more than a small margin.
+    let step = (output.new_position[0] - pos_before).abs();
+    assert!(
+        step <= 0.02,
+        "position jumped {step} in a single cycle (max_velocity * dt = {})",
+        1.0 * dt
+    );
+    output.pass_to_input(&mut input);
+
+    // Run to completion and confirm it does not finish before the trajectory's
+    // own duration.
+    let mut cycles = 1;
+    while res == RuckigResult::Working && cycles < 1000 {
+        res = otg.update(&input, &mut output).unwrap();
+        output.pass_to_input(&mut input);
+        cycles += 1;
+    }
+    assert_eq!(res, RuckigResult::Finished);
+    let elapsed = cycles as f64 * dt;
+    assert_float_eq!(elapsed, output.trajectory.get_duration(), abs <= 2.0 * dt);
+}
