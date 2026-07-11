@@ -89,7 +89,7 @@ fn check_calculation<const DOF: usize, E: RuckigErrorHandler>(
     stop.duration_since(start).as_nanos() as f64 / 1000.0
 }
 
-fn analyse(v: &Vec<f64>) -> (f64, f64) {
+fn analyse(v: &[f64]) -> (f64, f64) {
     let sum: f64 = v.iter().sum();
     let mean = sum / v.len() as f64;
 

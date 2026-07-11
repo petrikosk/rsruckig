@@ -6,7 +6,7 @@ use crate::roots;
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PositionThirdOrderStep1 {
     v0: f64,
     a0: f64,
@@ -83,6 +83,56 @@ impl PositionThirdOrderStep1 {
             valid_profiles: Default::default(),
             current_index: 0,
         }
+    }
+
+    /// Re-initialize an existing solver for a new per-DoF problem without
+    /// reallocating or re-zeroing `valid_profiles`.
+    ///
+    /// This is the reusable counterpart of [`Self::new`]: it is called once per DoF
+    /// per retarget so the ~3.3 KB `[Profile; 6]` buffer is default-constructed only
+    /// once (when the owning `TargetCalculator` is built) instead of on every call.
+    ///
+    /// Not re-zeroing `valid_profiles` is sound because every solver family fully
+    /// overwrites `t[0..7]` of a slot before `check` reads it (the first sub-solution
+    /// written to a slot always sets all seven entries), and `check` recomputes
+    /// `t_sum/j/a/v/p` from those. `set_boundary_from_profile` seeds `p/v/a[0]`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn reset(
+        &mut self,
+        p0: f64,
+        v0: f64,
+        a0: f64,
+        pf: f64,
+        vf: f64,
+        af: f64,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+        j_max: f64,
+    ) {
+        self.v0 = v0;
+        self.a0 = a0;
+        self.vf = vf;
+        self.af = af;
+        self._v_max = v_max;
+        self._v_min = v_min;
+        self._a_max = a_max;
+        self._a_min = a_min;
+        self._j_max = j_max;
+
+        self.pd = pf - p0;
+        self.v0_v0 = v0 * v0;
+        self.vf_vf = vf * vf;
+        self.a0_a0 = a0 * a0;
+        self.af_af = af * af;
+        self.a0_p3 = a0 * self.a0_a0;
+        self.a0_p4 = self.a0_a0 * self.a0_a0;
+        self.af_p3 = af * self.af_af;
+        self.af_p4 = self.af_af * self.af_af;
+        self.j_max_j_max = j_max * j_max;
+
+        self.current_index = 0;
     }
 
     #[inline]

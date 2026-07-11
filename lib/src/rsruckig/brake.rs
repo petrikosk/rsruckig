@@ -43,8 +43,7 @@ pub fn stop_distance_third_order(v: f64, a: f64, a_min: f64, j_max: f64) -> f64 
         let disc = a * a - 2.0 * j_max * v;
         let t_stop = (-a - disc.max(0.0).sqrt()) / j_max;
         let t_stop = t_stop.max(0.0);
-        return (v * t_stop + 0.5 * a * t_stop * t_stop
-            + j_max * t_stop * t_stop * t_stop / 6.0)
+        return (v * t_stop + 0.5 * a * t_stop * t_stop + j_max * t_stop * t_stop * t_stop / 6.0)
             .max(0.0);
     }
 
@@ -312,10 +311,10 @@ impl BrakeProfile {
 
         if a0 > a_max {
             self.j[0] = -j_max;
-            self.t[0] = (a0 - a_max) / j_max + core::f64::EPSILON;
+            self.t[0] = (a0 - a_max) / j_max + f64::EPSILON;
         } else if a0 < a_min {
             self.j[0] = j_max;
-            self.t[0] = -(a0 - a_min) / j_max + core::f64::EPSILON;
+            self.t[0] = -(a0 - a_min) / j_max + f64::EPSILON;
         }
     }
 

@@ -94,7 +94,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     /// # Parameters
     ///
     /// * `degrees_of_freedom` - The number of DoF when using heap allocation (DOF=0).
-    ///                          For stack allocation (DOF>0), this parameter is ignored.
+    ///   For stack allocation (DOF>0), this parameter is ignored.
     /// * `delta_time` - The control cycle duration in seconds.
     ///
     /// # Examples
@@ -289,7 +289,10 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
 
             output.time = 0.0; // reset sampling time for the newly calculated trajectory
             output.new_calculation = true;
-            self.current_input = input.clone();
+            // In-place copy reuses `current_input`'s storage instead of allocating fresh
+            // Vecs on every retarget (heap mode). Must stay in sync with InputParameter's
+            // PartialEq, which drives the `input != current_input` check above.
+            self.current_input.copy_from(input);
             self.current_input_initialized = true;
         }
 

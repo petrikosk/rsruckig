@@ -48,7 +48,7 @@ impl PositionSecondOrderStep1 {
     #[inline]
     fn add_profile(&mut self, profile: &mut Profile) {
         if self.current_index < 3 {
-            self.valid_profiles[self.current_index] = profile.clone();
+            self.valid_profiles[self.current_index] = *profile;
             self.current_index += 1;
             self.valid_profiles[self.current_index].set_boundary_from_profile(profile);
         }
@@ -102,7 +102,7 @@ impl PositionSecondOrderStep1 {
 
             // Solution 1
             {
-                let mut profile = self.valid_profiles[self.current_index].clone();
+                let mut profile = self.valid_profiles[self.current_index];
                 profile.t[0] = -(self.v0 + h1) / a_max;
                 profile.t[1] = 0.0;
                 profile.t[2] = (self.vf + h1) / a_min;
@@ -128,7 +128,7 @@ impl PositionSecondOrderStep1 {
 
             // Solution 2
             {
-                let mut profile = self.valid_profiles[self.current_index].clone();
+                let mut profile = self.valid_profiles[self.current_index];
                 profile.t[0] = (-self.v0 + h1) / a_max;
                 profile.t[1] = 0.0;
                 profile.t[2] = (self.vf - h1) / a_min;
@@ -227,7 +227,7 @@ impl PositionSecondOrderStep1 {
 
         self.valid_profiles[0].set_boundary_from_profile(input);
         self.current_index = 0;
-        let mut profile = self.valid_profiles[0].clone();
+        let mut profile = self.valid_profiles[0];
 
         if f64::abs(self.vf) < f64::EPSILON {
             // There is no blocked interval when self.vf==0.0, so return after first found profile

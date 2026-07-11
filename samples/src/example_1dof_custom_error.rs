@@ -1,5 +1,4 @@
 use log::{error, info};
-use log4rs;
 use rsruckig::error::RuckigErrorHandler;
 use rsruckig::prelude::*;
 

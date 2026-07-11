@@ -3,7 +3,7 @@ name = "rsruckig"
 authors = ["Petri Koskinen", "Lars Berscheid"]
 license = "MIT"
 readme = "../README.md"
-version = "2.2.1"
+version = "2.2.2"
 edition = "2021"
 description = "Ruckig motion planning library for Rust"
 keywords = ["motion", "trajectory", "planning", "robotics", "automation"]
@@ -26,5 +26,12 @@ thiserror = {version = "2.0.12", default-features = false }
 
 num-traits = { version = "0.2.19", default-features = false }
 
+[dev-dependencies]
+criterion = "0.5"
+
 [lib]
 path = "src/rsruckig/mod.rs"
+
+[[bench]]
+name = "calculate"
+harness = false

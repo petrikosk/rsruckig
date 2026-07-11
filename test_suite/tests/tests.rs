@@ -1151,7 +1151,7 @@ fn test_min_duration() -> Result<(), RuckigError> {
     let mut trajectory_min_duration = Trajectory::new(None);
     input.minimum_duration = Some(5.0);
     otg.calculate(&input, &mut trajectory_min_duration)?;
-    let new_duration = trajectory_min_duration.duration.clone();
+    let new_duration = trajectory_min_duration.duration;
     dbg!(duration, new_duration);
     assert!(new_duration > duration);
     assert_float_eq!(new_duration, 5.0, abs <= 0.000_1);
@@ -1185,7 +1185,7 @@ fn test_matched_signs_phase_sync() {
         .calculate(&input, &mut trajectory)
         .expect("This trajectory is solvable.");
 
-    let profiles = trajectory.get_profiles().get(0).unwrap();
+    let profiles = trajectory.get_profiles().first().unwrap();
     let dof0_profile = profiles.get(0).unwrap();
     let dof1_profile = profiles.get(1).unwrap();
 
@@ -1218,7 +1218,7 @@ fn test_mixed_signs_phase_sync() {
         .calculate(&input, &mut trajectory)
         .expect("This trajectory is solvable.");
 
-    let profiles = trajectory.get_profiles().get(0).unwrap();
+    let profiles = trajectory.get_profiles().first().unwrap();
     let dof0_profile = profiles.get(0).unwrap();
     let dof1_profile = profiles.get(1).unwrap();
 

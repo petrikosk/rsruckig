@@ -132,7 +132,7 @@ impl<const N: usize> Default for PositiveSet<N> {
 pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
     let mut roots = PositiveSet::new();
 
-    if d.abs() < core::f64::EPSILON {
+    if d.abs() < f64::EPSILON {
         // First solution is x = 0
         roots.insert(0.0);
 
@@ -143,9 +143,9 @@ pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
         let b = a;
         let _a = 0.0;
 
-        if b.abs() < core::f64::EPSILON {
+        if b.abs() < f64::EPSILON {
             // Linear equation
-            if c.abs() > core::f64::EPSILON {
+            if c.abs() > f64::EPSILON {
                 roots.insert(-tmp / c);
             }
         } else {
@@ -158,10 +158,10 @@ pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
                 roots.insert((-c - y) * inv2b);
             }
         }
-    } else if a.abs() < core::f64::EPSILON {
-        if b.abs() < core::f64::EPSILON {
+    } else if a.abs() < f64::EPSILON {
+        if b.abs() < f64::EPSILON {
             // Linear equation
-            if c.abs() > core::f64::EPSILON {
+            if c.abs() > f64::EPSILON {
                 roots.insert(-d / c);
             }
         } else {
@@ -244,6 +244,8 @@ pub fn solve_resolvent(x: &mut [f64; 3], a: f64, b: f64, c: f64) -> usize {
 
     if r2 < q3 {
         let q_sqrt = q.sqrt();
+        // Preserve the original NaN fallback semantics of min/max.
+        #[allow(clippy::manual_clamp)]
         let t = (r / (q * q_sqrt)).min(1.0).max(-1.0);
         q = -2.0 * q_sqrt;
 
@@ -264,7 +266,7 @@ pub fn solve_resolvent(x: &mut [f64; 3], a: f64, b: f64, c: f64) -> usize {
         x[0] = (a_ + b_) - a;
         x[1] = -(a_ + b_) / 2.0 - a;
         x[2] = 3.0_f64.sqrt() * (a_ - b_) / 2.0;
-        if x[2].abs() < core::f64::EPSILON {
+        if x[2].abs() < f64::EPSILON {
             x[2] = x[1];
             2
         } else {
@@ -281,12 +283,12 @@ pub fn solve_quart_monic_coeffs(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<4
     let a_squared = a * a;
     let four_b = 4.0 * b;
 
-    if d.abs() < core::f64::EPSILON {
-        if c.abs() < core::f64::EPSILON {
+    if d.abs() < f64::EPSILON {
+        if c.abs() < f64::EPSILON {
             roots.insert(0.0);
 
             let d_ = a_squared - four_b;
-            if d_.abs() < core::f64::EPSILON {
+            if d_.abs() < f64::EPSILON {
                 roots.insert(-a / 2.0);
             } else if d_ > 0.0 {
                 let sqrt_d = d_.sqrt();
@@ -296,7 +298,7 @@ pub fn solve_quart_monic_coeffs(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<4
             return roots;
         }
 
-        if a.abs() < core::f64::EPSILON && b.abs() < core::f64::EPSILON {
+        if a.abs() < f64::EPSILON && b.abs() < f64::EPSILON {
             roots.insert(0.0);
             roots.insert(-c.cbrt());
             return roots;
@@ -400,9 +402,9 @@ pub fn poly_monic_deri<const N: usize>(monic_coeffs: &ArrayVec<f64, N>) -> Array
 pub fn poly_eval<const N: usize>(p: &ArrayVec<f64, N>, x: f64) -> f64 {
     let mut result = 0.0;
     let n = p.len();
-    if x.abs() < core::f64::EPSILON {
+    if x.abs() < f64::EPSILON {
         result = p[n - 1];
-    } else if (x - 1.0).abs() < core::f64::EPSILON {
+    } else if (x - 1.0).abs() < f64::EPSILON {
         result = p.iter().sum();
     } else {
         let mut xn = 1.0;
@@ -451,7 +453,7 @@ pub fn shrink_interval<const N: usize, const MAX_ITS: usize>(
             dxold = dx;
             dx = (h - l) / 2.0;
             rts = l + dx;
-            if (l - rts).abs() < core::f64::EPSILON {
+            if (l - rts).abs() < f64::EPSILON {
                 break;
             }
         } else {
@@ -459,7 +461,7 @@ pub fn shrink_interval<const N: usize, const MAX_ITS: usize>(
             dx = f / df;
             let temp = rts;
             rts -= dx;
-            if (temp - rts).abs() < core::f64::EPSILON {
+            if (temp - rts).abs() < f64::EPSILON {
                 break;
             }
         }

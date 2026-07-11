@@ -139,7 +139,7 @@ impl Profile {
             self.t_sum[i + 1] = self.t_sum[i] + self.t[i + 1];
         }
 
-        if (limits == ReachedLimits::Acc0) && self.t[1] < core::f64::EPSILON {
+        if (limits == ReachedLimits::Acc0) && self.t[1] < f64::EPSILON {
             return false;
         }
 
@@ -430,10 +430,8 @@ impl Profile {
 
             if set_limits {
                 match limits {
-                    ReachedLimits::Acc1 => {
-                        if i == 2 {
-                            self.a[3] = a_min;
-                        }
+                    ReachedLimits::Acc1 if i == 2 => {
+                        self.a[3] = a_min;
                     }
                     ReachedLimits::Acc0Acc1 => {
                         if i == 0 {
@@ -472,13 +470,20 @@ impl Profile {
         (self.p[7] - self.pf).abs() < P_PRECISION
             && (self.v[7] - self.vf).abs() < V_PRECISION
             && (self.a[7] - self.af).abs() < A_PRECISION
-            && self.a[1] >= a_low_lim && self.a[1] <= a_upp_lim
-            && self.a[3] >= a_low_lim && self.a[3] <= a_upp_lim
-            && self.a[5] >= a_low_lim && self.a[5] <= a_upp_lim
-            && self.v[3] <= v_upp_lim && self.v[3] >= v_low_lim
-            && self.v[4] <= v_upp_lim && self.v[4] >= v_low_lim
-            && self.v[5] <= v_upp_lim && self.v[5] >= v_low_lim
-            && self.v[6] <= v_upp_lim && self.v[6] >= v_low_lim
+            && self.a[1] >= a_low_lim
+            && self.a[1] <= a_upp_lim
+            && self.a[3] >= a_low_lim
+            && self.a[3] <= a_upp_lim
+            && self.a[5] >= a_low_lim
+            && self.a[5] <= a_upp_lim
+            && self.v[3] <= v_upp_lim
+            && self.v[3] >= v_low_lim
+            && self.v[4] <= v_upp_lim
+            && self.v[4] >= v_low_lim
+            && self.v[5] <= v_upp_lim
+            && self.v[5] >= v_low_lim
+            && self.v[6] <= v_upp_lim
+            && self.v[6] >= v_low_lim
     }
 
     #[inline]
@@ -628,12 +633,18 @@ impl Profile {
 
         (self.p[7] - self.pf).abs() < P_PRECISION
             && (self.v[7] - self.vf).abs() < P_PRECISION
-            && self.v[2] <= v_upp_lim && self.v[2] >= v_low_lim
-            && self.v[3] <= v_upp_lim && self.v[3] >= v_low_lim
-            && self.v[4] <= v_upp_lim && self.v[4] >= v_low_lim
-            && self.v[5] <= v_upp_lim && self.v[5] >= v_low_lim
-            && self.v[6] <= v_upp_lim && self.v[6] >= v_low_lim
-            && self.v[7] <= v_upp_lim && self.v[7] >= v_low_lim
+            && self.v[2] <= v_upp_lim
+            && self.v[2] >= v_low_lim
+            && self.v[3] <= v_upp_lim
+            && self.v[3] >= v_low_lim
+            && self.v[4] <= v_upp_lim
+            && self.v[4] >= v_low_lim
+            && self.v[5] <= v_upp_lim
+            && self.v[5] >= v_low_lim
+            && self.v[6] <= v_upp_lim
+            && self.v[6] >= v_low_lim
+            && self.v[7] <= v_upp_lim
+            && self.v[7] >= v_low_lim
     }
 
     #[inline]

@@ -134,6 +134,29 @@ impl<T: Default + Clone + core::fmt::Debug, const N: usize> DataArrayOrVec<T, N>
         // DerefMut gives us &mut [T], which has an efficient iter_mut()
         <Self as core::ops::DerefMut>::deref_mut(self).iter_mut()
     }
+
+    /// Overwrite the contents of `self` with the contents of `other` in place.
+    ///
+    /// Unlike `self = other.clone()`, this reuses the existing backing storage:
+    /// stack variants are copied element-wise, and heap variants of equal length
+    /// are filled via `clone_from_slice` without reallocating. This keeps the
+    /// retarget path allocation-free in heap mode (see `InputParameter::copy_from`).
+    #[inline]
+    pub fn copy_from(&mut self, other: &Self) {
+        match (self, other) {
+            (DataArrayOrVec::Stack(a), DataArrayOrVec::Stack(b)) => a.clone_from_slice(b),
+            (DataArrayOrVec::Heap(a), DataArrayOrVec::Heap(b)) => {
+                if a.len() == b.len() {
+                    a.clone_from_slice(b);
+                } else {
+                    a.clear();
+                    a.extend(b.iter().cloned());
+                }
+            }
+            // Variant mismatch (should not happen for same-DOF containers): fall back.
+            (dst, src) => *dst = src.clone(),
+        }
+    }
 }
 
 impl<T: PartialEq + core::fmt::Debug, const N: usize> PartialEq for DataArrayOrVec<T, N> {

@@ -219,6 +219,67 @@ impl<const DOF: usize> PartialEq for InputParameter<DOF> {
     }
 }
 
+impl<const DOF: usize> InputParameter<DOF> {
+    /// Overwrite `self` with the contents of `other`, reusing existing storage.
+    ///
+    /// This is the allocation-free equivalent of `*self = other.clone()` used on the
+    /// retarget hot path (`Ruckig::update`): in heap mode (`DOF == 0`) cloning would
+    /// allocate a fresh `Vec` for every array field, whereas this copies in place.
+    ///
+    /// IMPORTANT: this must copy every field compared by [`PartialEq`] (see the `eq`
+    /// impl above) so that the `input != current_input` retarget check stays exact.
+    /// It also copies the two fields `PartialEq` ignores (`degrees_of_freedom`,
+    /// `interrupt_calculation_duration`) so `self` remains a faithful copy of `other`.
+    /// Keep this in sync with both the struct definition and `PartialEq`.
+    pub fn copy_from(&mut self, other: &Self) {
+        #[inline]
+        fn copy_opt<T: Clone + Default + core::fmt::Debug, const N: usize>(
+            dst: &mut Option<DataArrayOrVec<T, N>>,
+            src: &Option<DataArrayOrVec<T, N>>,
+        ) {
+            match (dst.as_mut(), src) {
+                (Some(d), Some(s)) => d.copy_from(s),
+                (_, None) => *dst = None,
+                (None, Some(s)) => *dst = Some(s.clone()),
+            }
+        }
+
+        self.degrees_of_freedom = other.degrees_of_freedom;
+        self.control_interface = other.control_interface;
+        self.synchronization = other.synchronization;
+        self.duration_discretization = other.duration_discretization.clone();
+
+        self.current_position.copy_from(&other.current_position);
+        self.current_velocity.copy_from(&other.current_velocity);
+        self.current_acceleration
+            .copy_from(&other.current_acceleration);
+        self.target_position.copy_from(&other.target_position);
+        self.target_velocity.copy_from(&other.target_velocity);
+        self.target_acceleration
+            .copy_from(&other.target_acceleration);
+        self.max_velocity.copy_from(&other.max_velocity);
+        self.max_acceleration.copy_from(&other.max_acceleration);
+        self.max_jerk.copy_from(&other.max_jerk);
+        self.enabled.copy_from(&other.enabled);
+
+        copy_opt(&mut self.min_velocity, &other.min_velocity);
+        copy_opt(&mut self.min_acceleration, &other.min_acceleration);
+        copy_opt(&mut self.max_position, &other.max_position);
+        copy_opt(&mut self.min_position, &other.min_position);
+        copy_opt(
+            &mut self.per_dof_control_interface,
+            &other.per_dof_control_interface,
+        );
+        copy_opt(
+            &mut self.per_dof_synchronization,
+            &other.per_dof_synchronization,
+        );
+
+        self.minimum_duration = other.minimum_duration;
+        self.interrupt_calculation_duration = other.interrupt_calculation_duration;
+    }
+}
+
 impl<const DOF: usize> Default for InputParameter<DOF> {
     fn default() -> Self {
         Self::new(None)
@@ -523,7 +584,7 @@ impl<const DOF: usize> InputParameter<DOF> {
 
 impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "")?;
+        writeln!(f)?;
 
         if self.control_interface == ControlInterface::Velocity {
             writeln!(f, "inp.control_interface = ControlInterface.Velocity")?;

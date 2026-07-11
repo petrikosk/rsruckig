@@ -67,3 +67,48 @@ fn test_tracking_steady_state_is_allocation_free() {
         "steady-state tracking made {allocations} heap allocations"
     );
 }
+
+/// Guards `InputParameter::copy_from`: in heap mode (`DOF == 0`) a retarget must not
+/// reallocate `current_input`. Before that change, `Ruckig::update` cloned the input
+/// on every recalculation, allocating a fresh `Vec` per array field each cycle.
+#[test]
+fn test_heap_mode_retarget_is_allocation_free() {
+    let mut otg = Ruckig::<0, IgnoreErrorHandler>::new(Some(3), DT);
+    let mut output = OutputParameter::<0>::new(Some(3));
+
+    let mut input_a = InputParameter::<0>::new(Some(3));
+    input_a.synchronization = Synchronization::None;
+    input_a.current_position = daov_heap![0.0, 0.0, 0.0];
+    input_a.target_position = daov_heap![1.0, 2.0, 3.0];
+    input_a.max_velocity = daov_heap![3.0, 3.0, 3.0];
+    input_a.max_acceleration = daov_heap![3.0, 3.0, 3.0];
+    input_a.max_jerk = daov_heap![4.0, 4.0, 4.0];
+    input_a.min_velocity = Some(daov_heap![-3.0, -3.0, -3.0]);
+    input_a.min_acceleration = Some(daov_heap![-3.0, -3.0, -3.0]);
+
+    let mut input_b = input_a.clone();
+    input_b.target_position = daov_heap![-1.0, -2.0, -3.0];
+
+    // Warm-up: let one-time allocations (trajectory profiles, first Some(..) copies,
+    // internal scratch buffers) settle before counting.
+    for i in 0..50 {
+        let input = if i % 2 == 0 { &input_a } else { &input_b };
+        otg.update(input, &mut output).unwrap();
+    }
+
+    // Each iteration alternates the target, so `update` recalculates every cycle and
+    // copies the input into `current_input`. That copy must reuse existing storage.
+    ALLOCATIONS.store(0, Ordering::Relaxed);
+    COUNTING.store(true, Ordering::Relaxed);
+    for i in 0..1000 {
+        let input = if i % 2 == 0 { &input_a } else { &input_b };
+        otg.update(input, &mut output).unwrap();
+    }
+    COUNTING.store(false, Ordering::Relaxed);
+
+    let allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    assert_eq!(
+        allocations, 0,
+        "heap-mode retarget made {allocations} heap allocations"
+    );
+}

@@ -28,15 +28,14 @@ pub fn remove_profile(
 impl Block {
     #[inline]
     pub fn set_min_profile(&mut self, profile: &Profile) {
-        self.p_min = profile.clone();
-        self.t_min = self.p_min.t_sum[6]
-            + self.p_min.brake.duration
-            + self.p_min.accel.duration;
+        self.p_min = *profile;
+        self.t_min = self.p_min.t_sum[6] + self.p_min.brake.duration + self.p_min.accel.duration;
         self.a = None;
         self.b = None;
     }
 
     #[inline]
+    #[allow(clippy::if_same_then_else)]
     pub fn calculate_block(
         block: &mut Block,
         valid_profiles: &mut [Profile; 6],
@@ -47,9 +46,8 @@ impl Block {
             block.set_min_profile(&valid_profiles[0]);
             return true;
         } else if *valid_profile_counter == 2 {
-            if f64::abs(
-                valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6],
-            ) < 8.0 * core::f64::EPSILON
+            if f64::abs(valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6])
+                < 8.0 * f64::EPSILON
             {
                 block.set_min_profile(&valid_profiles[0]);
                 return true;
@@ -78,21 +76,18 @@ impl Block {
             // compare directions: a degenerate profile (e.g. with a zero-width
             // velocity plateau) can duplicate a profile of the same direction
             // from another family (matches upstream C++ behavior).
-            if f64::abs(
-                valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6],
-            ) < 32.0 * f64::EPSILON
+            if f64::abs(valid_profiles[0].t_sum[6] - valid_profiles[1].t_sum[6])
+                < 32.0 * f64::EPSILON
                 && valid_profiles[0].direction != valid_profiles[1].direction
             {
                 remove_profile(valid_profiles, valid_profile_counter, 1);
-            } else if f64::abs(
-                valid_profiles[2].t_sum[6] - valid_profiles[3].t_sum[6],
-            ) < 256.0 * f64::EPSILON
+            } else if f64::abs(valid_profiles[2].t_sum[6] - valid_profiles[3].t_sum[6])
+                < 256.0 * f64::EPSILON
                 && valid_profiles[2].direction != valid_profiles[3].direction
             {
                 remove_profile(valid_profiles, valid_profile_counter, 3);
-            } else if f64::abs(
-                valid_profiles[0].t_sum[6] - valid_profiles[3].t_sum[6],
-            ) < 256.0 * f64::EPSILON
+            } else if f64::abs(valid_profiles[0].t_sum[6] - valid_profiles[3].t_sum[6])
+                < 256.0 * f64::EPSILON
             {
                 remove_profile(valid_profiles, valid_profile_counter, 3);
             } else {
@@ -117,7 +112,7 @@ impl Block {
                     return false;
                 }
             }
-        } else if *valid_profile_counter % 2 == 0 {
+        } else if (*valid_profile_counter).is_multiple_of(2) {
             return false;
         }
 
@@ -241,12 +236,10 @@ impl Interval {
 
     #[inline]
     pub fn from_profiles(profile_left: &Profile, profile_right: &Profile) -> Self {
-        let left_duration = profile_left.t_sum[6]
-            + profile_left.brake.duration
-            + profile_left.accel.duration;
-        let right_duration = profile_right.t_sum[6]
-            + profile_right.brake.duration
-            + profile_right.accel.duration;
+        let left_duration =
+            profile_left.t_sum[6] + profile_left.brake.duration + profile_left.accel.duration;
+        let right_duration =
+            profile_right.t_sum[6] + profile_right.brake.duration + profile_right.accel.duration;
 
         let (left, right, profile) = if left_duration < right_duration {
             (left_duration, right_duration, profile_right)
@@ -257,7 +250,7 @@ impl Interval {
         Self {
             left,
             right,
-            profile: profile.clone(),
+            profile: *profile,
         }
     }
 }
