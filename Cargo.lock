@@ -705,9 +705,9 @@ dependencies = [
 name = "rsruckig-samples"
 version = "0.1.0"
 dependencies = [
- "gnuplot",
  "log",
  "log4rs",
+ "plotters",
  "rsruckig",
 ]
 

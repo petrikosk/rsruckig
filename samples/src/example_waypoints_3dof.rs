@@ -1,11 +1,12 @@
 //! Trajectory through intermediate waypoints (mirrors upstream example 03),
 //! calculated locally by the pass-through waypoint solver.
 
-use gnuplot::Coordinate::Graph;
-use gnuplot::{AxesCommon, Caption, Figure};
 use rsruckig::prelude::*;
 
-fn main() {
+mod plot_util;
+use plot_util::Series;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let max_number_of_waypoints = 10; // for pre-allocation
     let mut otg = Ruckig::<3, ThrowErrorHandler>::with_waypoints(None, 0.01, max_number_of_waypoints);
     let mut input = InputParameter::<3>::with_waypoints(None, max_number_of_waypoints);
@@ -60,25 +61,17 @@ fn main() {
     );
     println!("Max calculation duration: {} µs", max_calculation_duration);
 
-    let mut fg = Figure::new();
-    // gnuplot 6 on Windows defaults to the qt terminal, which cannot draw over
-    // a pipe (gnuplot bug #1426: black/empty window) - use the native windows
-    // terminal instead, unless the user picked one explicitly via GNUTERM
-    #[cfg(windows)]
-    if std::env::var_os("GNUTERM").is_none() {
-        fg.set_terminal("windows", "");
-    }
     let chart_title = format!(
         "Trajectory through 4 intermediate waypoints. Max. calc duration {} µs",
         max_calculation_duration
     );
-    fg.axes2d()
-        .set_title(chart_title.as_str(), &[])
-        .set_legend(Graph(0.5), Graph(0.9), &[], &[])
-        .set_x_label("time in seconds", &[])
-        .set_y_label("Position 3 DoF", &[])
-        .lines(x_time.clone(), y_pos1.clone(), &[Caption("Position 1")])
-        .lines(x_time.clone(), y_pos2.clone(), &[Caption("Position 2")])
-        .lines(x_time.clone(), y_pos3.clone(), &[Caption("Position 3")]);
-    fg.show().unwrap();
+    plot_util::plot(
+        &chart_title,
+        "Position 3 DoF",
+        &[
+            Series::new("Position 1", &x_time, &y_pos1),
+            Series::new("Position 2", &x_time, &y_pos2),
+            Series::new("Position 3", &x_time, &y_pos3),
+        ],
+    )
 }

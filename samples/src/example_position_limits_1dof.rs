@@ -4,9 +4,10 @@
 //! beyond the target before coming back. With max_position, the same motion is
 //! kept inside the allowed workspace.
 
-use gnuplot::Coordinate::Graph;
-use gnuplot::{AxesCommon, Caption, Color, DashType, Figure, LineStyle};
 use rsruckig::prelude::*;
+
+mod plot_util;
+use plot_util::Series;
 
 fn generate(with_limits: bool) -> (Vec<f64>, Vec<f64>) {
     let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.001);
@@ -35,7 +36,7 @@ fn generate(with_limits: bool) -> (Vec<f64>, Vec<f64>) {
     (x_time, y_pos)
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (x_free, y_free) = generate(false);
     let (x_lim, y_lim) = generate(true);
 
@@ -44,37 +45,13 @@ fn main() {
     )];
     let limit_line_y = [10.0, 10.0];
 
-    let mut fg = Figure::new();
-    // gnuplot 6 on Windows defaults to the qt terminal, which cannot draw over
-    // a pipe (gnuplot bug #1426: black/empty window) - use the native windows
-    // terminal instead, unless the user picked one explicitly via GNUTERM
-    #[cfg(windows)]
-    if std::env::var_os("GNUTERM").is_none() {
-        fg.set_terminal("windows", "");
-    }
-    fg.axes2d()
-        .set_title("Position limits: overshoot constrained by max\\_position", &[])
-        .set_legend(Graph(0.6), Graph(0.3), &[], &[])
-        .set_x_label("time in seconds", &[])
-        .set_y_label("position", &[])
-        .lines(
-            x_free,
-            y_free,
-            &[Caption("Without position limits"), Color("red")],
-        )
-        .lines(
-            x_lim,
-            y_lim,
-            &[Caption("With max\\_position = 10"), Color("blue")],
-        )
-        .lines(
-            limit_line_x.to_vec(),
-            limit_line_y.to_vec(),
-            &[
-                Caption("max\\_position"),
-                Color("black"),
-                LineStyle(DashType::Dash),
-            ],
-        );
-    fg.show().unwrap();
+    plot_util::plot(
+        "Position limits: overshoot constrained by max_position",
+        "Position",
+        &[
+            Series::new("Without position limits", &x_free, &y_free),
+            Series::new("With max_position = 10", &x_lim, &y_lim),
+            Series::dashed("max_position", &limit_line_x, &limit_line_y),
+        ],
+    )
 }

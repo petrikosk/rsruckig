@@ -9,7 +9,7 @@ This is a Rust port of the repository https://github.com/pantor/ruckig/. Cloud c
 ported. However, this port implements its own equivalents of three Ruckig Pro features: **position limits**
 (`min_position` / `max_position`), a **tracking interface** (`Trackig`) for following a moving target signal, and
 **intermediate waypoints** (`intermediate_positions`) calculated locally by a pass-through waypoint solver. The
-examples use Gnuplot to illustrate the trajectories.
+examples plot the trajectories as SVG files using the pure-Rust [plotters](https://crates.io/crates/plotters) crate.
 
 Ruckig generates trajectories on-the-fly, allowing robots and machines to react instantaneously to sensor input. Ruckig
 calculates a trajectory to a _target_ state (with position, velocity, and acceleration) starting from _any_ initial
@@ -52,16 +52,8 @@ This crate still requires `alloc`. Use the following in your Cargo.toml:
 
 ### Dependencies
 
-Ensure you have the following dependencies installed:
-
-- Rust (latest stable version)
-- Gnuplot (for visualizing trajectories)
-
-On Ubuntu, you can install Gnuplot with:
-
-```bash
-sudo apt-get install gnuplot
-```
+- Rust (latest stable version) - that's it. The example plots are rendered with the pure-Rust
+  [plotters](https://crates.io/crates/plotters) crate, so no external tools are required.
 
 ## Documentation
 
@@ -196,7 +188,8 @@ fn main() {
 
 ### Running the Bundled Examples
 
-The `samples/` crate contains runnable examples that plot the trajectories with Gnuplot:
+The `samples/` crate contains runnable examples that save the trajectory plots as SVG files
+(`<example name>.svg` in the working directory):
 
 ```bash
 cargo run --bin example_position_1dof
@@ -206,13 +199,14 @@ cargo run --bin example_velocity_1dof
 cargo run --bin example_position_1dof_custom_error_handler
 cargo run --bin example_position_limits_1dof
 cargo run --bin example_tracking_1dof
+cargo run --bin example_waypoints_3dof
 ```
 
 ## Tutorial
 
 Let's get started!
 
-![Trajectory Profile](https://github.com/petrikosk/rsruckig/raw/master/doc/example_profile.png?raw=true)
+[<img src="doc/example_profile.svg" width="800" alt="Trajectory Profile">](doc/example_profile.svg)
 
 ### State-to-state Trajectory Generation
 

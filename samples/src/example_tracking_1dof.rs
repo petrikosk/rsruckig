@@ -1,11 +1,12 @@
 //! Tracking example: follow a moving target signal (sinusoid + step) with the
 //! Trackig interface under kinematic constraints.
 
-use gnuplot::Coordinate::Graph;
-use gnuplot::{AxesCommon, Caption, Color, Figure};
 use rsruckig::prelude::*;
 
-fn main() {
+mod plot_util;
+use plot_util::Series;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let delta_time = 0.001;
     let mut otg = Trackig::<1, IgnoreErrorHandler>::new(None, delta_time);
     let mut input = InputParameter::new(None);
@@ -49,32 +50,16 @@ fn main() {
     }
     println!("Max calculation duration: {max_calculation_duration} µs");
 
-    let mut fg = Figure::new();
-    // gnuplot 6 on Windows defaults to the qt terminal, which cannot draw over
-    // a pipe (gnuplot bug #1426: black/empty window) - use the native windows
-    // terminal instead, unless the user picked one explicitly via GNUTERM
-    #[cfg(windows)]
-    if std::env::var_os("GNUTERM").is_none() {
-        fg.set_terminal("windows", "");
-    }
     let chart_title = format!(
         "Tracking a moving target. Max. calc duration {max_calculation_duration:.1} µs"
     );
-    fg.axes2d()
-        .set_title(&chart_title, &[])
-        .set_legend(Graph(0.7), Graph(0.9), &[], &[])
-        .set_x_label("time in seconds", &[])
-        .set_y_label("position / velocity", &[])
-        .lines(
-            x_time.clone(),
-            y_target,
-            &[Caption("Target position"), Color("red")],
-        )
-        .lines(
-            x_time.clone(),
-            y_tracked,
-            &[Caption("Tracked position"), Color("blue")],
-        )
-        .lines(x_time, y_vel, &[Caption("Velocity"), Color("gray")]);
-    fg.show().unwrap();
+    plot_util::plot(
+        &chart_title,
+        "Position / Velocity",
+        &[
+            Series::new("Target position", &x_time, &y_target),
+            Series::new("Tracked position", &x_time, &y_tracked),
+            Series::new("Velocity", &x_time, &y_vel),
+        ],
+    )
 }

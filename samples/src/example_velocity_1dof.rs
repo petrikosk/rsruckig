@@ -1,8 +1,9 @@
-use gnuplot::Coordinate::Graph;
-use gnuplot::{AxesCommon, Caption, Figure};
 use rsruckig::prelude::*;
 
-fn main() {
+mod plot_util;
+use plot_util::Series;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
     let mut input = InputParameter::new(None);
     let mut output = OutputParameter::new(None);
@@ -42,26 +43,18 @@ fn main() {
     }
     println!("Max calculation duration: {} µs", max_calculation_duration);
 
-    let mut fg = Figure::new();
-    // gnuplot 6 on Windows defaults to the qt terminal, which cannot draw over
-    // a pipe (gnuplot bug #1426: black/empty window) - use the native windows
-    // terminal instead, unless the user picked one explicitly via GNUTERM
-    #[cfg(windows)]
-    if std::env::var_os("GNUTERM").is_none() {
-        fg.set_terminal("windows", "");
-    }
     let chart_title = format!(
         "S-Curve Velocity Motion Profile. Max. calc duration {} µs",
         max_calculation_duration
     );
-    fg.axes2d()
-        .set_title(chart_title.as_str(), &[])
-        .set_legend(Graph(0.5), Graph(0.9), &[], &[])
-        .set_x_label("time in seconds", &[])
-        .set_y_label("Position derivatives u, u/s, u/s², u/s³", &[])
-        .lines(x_time.clone(), y_pos.clone(), &[Caption("Position")])
-        .lines(x_time.clone(), y_vel.clone(), &[Caption("Velocity")])
-        .lines(x_time.clone(), y_acc.clone(), &[Caption("Acceleration")])
-        .lines(x_time.clone(), y_jerk.clone(), &[Caption("Jerk")]);
-    fg.show().unwrap();
+    plot_util::plot(
+        &chart_title,
+        "Position derivatives u, u/s, u/s², u/s³",
+        &[
+            Series::new("Position", &x_time, &y_pos),
+            Series::new("Velocity", &x_time, &y_vel),
+            Series::new("Acceleration", &x_time, &y_acc),
+            Series::new("Jerk", &x_time, &y_jerk),
+        ],
+    )
 }

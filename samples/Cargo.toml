@@ -39,6 +39,7 @@ path = "src/example_waypoints_3dof.rs"
 
 [dependencies]
 rsruckig = { path = "../lib" }
-gnuplot = "0.0.39"
+# Pure-Rust SVG plotting - no external gnuplot installation required
+plotters = { version = "0.3", default-features = false, features = ["svg_backend", "line_series"] }
 log = "0.4.20"
 log4rs = "1.2.0"
