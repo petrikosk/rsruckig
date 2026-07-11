@@ -83,6 +83,14 @@ impl<const DOF: usize> OutputParameter<DOF> {
             calculation_duration: 0.0,
         }
     }
+
+    /// Like [`new`](OutputParameter::new), but pre-allocates trajectory storage
+    /// for up to `max_number_of_waypoints` intermediate positions
+    pub fn with_waypoints(dofs: Option<usize>, max_number_of_waypoints: usize) -> Self {
+        let mut output = Self::new(dofs);
+        output.trajectory.reserve_sections(max_number_of_waypoints + 1);
+        output
+    }
     /// Updates the current kinematic state in the input parameter with the new state from output
     ///
     /// This is a crucial method for continuous trajectory generation. After each update step,

@@ -167,6 +167,18 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
             &mut s.per_dof_synchronization,
             &input.per_dof_synchronization,
         );
+        // Deliberate exception to the faithful copy: intermediate waypoints are
+        // not supported by the tracking interface (update() rejects them), so
+        // the scratch input always stays single-section
+        s.intermediate_positions.clear();
+        s.per_section_max_velocity = None;
+        s.per_section_max_acceleration = None;
+        s.per_section_max_jerk = None;
+        s.per_section_min_velocity = None;
+        s.per_section_min_acceleration = None;
+        s.per_section_max_position = None;
+        s.per_section_min_position = None;
+        s.per_section_minimum_duration = None;
     }
 
     /// Optionally low-pass filter the raw target signal. Returns whether the
@@ -296,9 +308,10 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
     /// allocating
     fn store_fallback(&mut self, traj: &Trajectory<DOF>) {
         self.fallback_trajectory.duration = traj.duration;
+        self.fallback_trajectory.cumulative_times.clear();
         self.fallback_trajectory
             .cumulative_times
-            .copy_from_slice(&traj.cumulative_times);
+            .extend_from_slice(&traj.cumulative_times);
         self.fallback_trajectory
             .independent_min_durations
             .copy_from_slice(&traj.independent_min_durations);
@@ -309,8 +322,9 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
 
     fn restore_fallback(&self, traj: &mut Trajectory<DOF>) {
         traj.duration = self.fallback_trajectory.duration;
+        traj.cumulative_times.clear();
         traj.cumulative_times
-            .copy_from_slice(&self.fallback_trajectory.cumulative_times);
+            .extend_from_slice(&self.fallback_trajectory.cumulative_times);
         traj.independent_min_durations
             .copy_from_slice(&self.fallback_trajectory.independent_min_durations);
         for dof in 0..self.degrees_of_freedom {
@@ -345,6 +359,13 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
             return Ok(RuckigResult::Error);
         }
 
+        if !input.intermediate_positions.is_empty() {
+            E::handle_validation_error(
+                "intermediate positions are not supported by the tracking interface.",
+            )?;
+            return Ok(RuckigResult::ErrorInvalidInput);
+        }
+
         self.copy_input(input);
         let use_filtered = self.filter_target(target);
         self.clamp_target_into_scratch(use_filtered, target);
@@ -376,14 +397,16 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
 
         let old_section = output.new_section;
         output.time = self.time_along_trajectory;
+        let mut new_section = Some(output.new_section);
         output.trajectory.at_time(
             output.time,
             &mut Some(&mut output.new_position),
             &mut Some(&mut output.new_velocity),
             &mut Some(&mut output.new_acceleration),
             &mut Some(&mut output.new_jerk),
-            &mut Some(output.new_section),
+            &mut new_section,
         );
+        output.new_section = new_section.unwrap_or(old_section);
         output.did_section_change = output.new_section > old_section;
 
         #[cfg(feature = "std")]

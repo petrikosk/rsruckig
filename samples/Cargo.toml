@@ -32,6 +32,10 @@ path = "src/example_position_limits_1dof.rs"
 name = "example_tracking_1dof"
 path = "src/example_tracking_1dof.rs"
 
+[[bin]]
+name = "example_waypoints_3dof"
+path = "src/example_waypoints_3dof.rs"
+
 
 [dependencies]
 rsruckig = { path = "../lib" }

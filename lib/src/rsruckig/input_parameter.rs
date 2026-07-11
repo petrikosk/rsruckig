@@ -11,6 +11,7 @@ use core::fmt;
 use core::ops::Deref;
 
 use crate::alloc::format;
+use crate::alloc::vec::Vec;
 
 /// Control interface for trajectory generation
 ///
@@ -182,6 +183,28 @@ pub struct InputParameter<const DOF: usize> {
     /// Minimum position limit for each DoF. If None, no lower position limit is applied.
     /// Use `f64::NEG_INFINITY` entries to disable the limit for individual DoFs.
     pub min_position: Option<DataArrayOrVec<f64, DOF>>,
+    /// Intermediate waypoint positions the trajectory should pass through (per
+    /// waypoint, one position per DoF). Empty by default. Requires the position
+    /// control interface and a global synchronization. The trajectory then
+    /// consists of `intermediate_positions.len() + 1` sections.
+    pub intermediate_positions: Vec<DataArrayOrVec<f64, DOF>>,
+    /// Per-section maximum velocity, overwrites the global `max_velocity` for
+    /// individual sections. Length must be `intermediate_positions.len() + 1`.
+    pub per_section_max_velocity: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Per-section maximum acceleration, overwrites the global `max_acceleration`
+    pub per_section_max_acceleration: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Per-section maximum jerk, overwrites the global `max_jerk`
+    pub per_section_max_jerk: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Per-section minimum velocity (negative values), overwrites the global `min_velocity`
+    pub per_section_min_velocity: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Per-section minimum acceleration (negative values), overwrites the global `min_acceleration`
+    pub per_section_min_acceleration: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Per-section maximum position limit, overwrites the global `max_position`
+    pub per_section_max_position: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Per-section minimum position limit, overwrites the global `min_position`
+    pub per_section_min_position: Option<Vec<DataArrayOrVec<f64, DOF>>>,
+    /// Optional minimum duration per section. Length must be `intermediate_positions.len() + 1`.
+    pub per_section_minimum_duration: Option<Vec<f64>>,
     /// Whether each DoF is enabled in the calculation
     pub enabled: DataArrayOrVec<bool, DOF>,
     /// Sets the control interface for each DoF individually, overwrites global control_interface
@@ -216,6 +239,15 @@ impl<const DOF: usize> PartialEq for InputParameter<DOF> {
             && self.duration_discretization == other.duration_discretization
             && self.per_dof_control_interface == other.per_dof_control_interface
             && self.per_dof_synchronization == other.per_dof_synchronization
+            && self.intermediate_positions == other.intermediate_positions
+            && self.per_section_max_velocity == other.per_section_max_velocity
+            && self.per_section_max_acceleration == other.per_section_max_acceleration
+            && self.per_section_max_jerk == other.per_section_max_jerk
+            && self.per_section_min_velocity == other.per_section_min_velocity
+            && self.per_section_min_acceleration == other.per_section_min_acceleration
+            && self.per_section_max_position == other.per_section_max_position
+            && self.per_section_min_position == other.per_section_min_position
+            && self.per_section_minimum_duration == other.per_section_minimum_duration
     }
 }
 
@@ -275,8 +307,73 @@ impl<const DOF: usize> InputParameter<DOF> {
             &other.per_dof_synchronization,
         );
 
+        copy_vec(&mut self.intermediate_positions, &other.intermediate_positions);
+        copy_opt_vec(
+            &mut self.per_section_max_velocity,
+            &other.per_section_max_velocity,
+        );
+        copy_opt_vec(
+            &mut self.per_section_max_acceleration,
+            &other.per_section_max_acceleration,
+        );
+        copy_opt_vec(&mut self.per_section_max_jerk, &other.per_section_max_jerk);
+        copy_opt_vec(
+            &mut self.per_section_min_velocity,
+            &other.per_section_min_velocity,
+        );
+        copy_opt_vec(
+            &mut self.per_section_min_acceleration,
+            &other.per_section_min_acceleration,
+        );
+        copy_opt_vec(
+            &mut self.per_section_max_position,
+            &other.per_section_max_position,
+        );
+        copy_opt_vec(
+            &mut self.per_section_min_position,
+            &other.per_section_min_position,
+        );
+        match (
+            self.per_section_minimum_duration.as_mut(),
+            &other.per_section_minimum_duration,
+        ) {
+            (Some(d), Some(s)) => {
+                d.clear();
+                d.extend_from_slice(s);
+            }
+            (_, None) => self.per_section_minimum_duration = None,
+            (None, Some(s)) => self.per_section_minimum_duration = Some(s.clone()),
+        }
+
         self.minimum_duration = other.minimum_duration;
         self.interrupt_calculation_duration = other.interrupt_calculation_duration;
+    }
+}
+
+/// Copy a per-waypoint/per-section list in place, reusing existing per-DoF
+/// storage when the list length is unchanged (allocation-free steady state)
+fn copy_vec<T: Copy + Clone + Default + core::fmt::Debug, const N: usize>(
+    dst: &mut Vec<DataArrayOrVec<T, N>>,
+    src: &[DataArrayOrVec<T, N>],
+) {
+    dst.truncate(src.len());
+    let n_reused = dst.len();
+    for (d, s) in dst.iter_mut().zip(src) {
+        d.copy_from(s);
+    }
+    for s in &src[n_reused..] {
+        dst.push(s.clone());
+    }
+}
+
+fn copy_opt_vec<T: Copy + Clone + Default + core::fmt::Debug, const N: usize>(
+    dst: &mut Option<Vec<DataArrayOrVec<T, N>>>,
+    src: &Option<Vec<DataArrayOrVec<T, N>>>,
+) {
+    match (dst.as_mut(), src) {
+        (Some(d), Some(s)) => copy_vec(d, s),
+        (_, None) => *dst = None,
+        (None, Some(s)) => *dst = Some(s.clone()),
     }
 }
 
@@ -307,11 +404,29 @@ impl<const DOF: usize> InputParameter<DOF> {
             min_acceleration: None,
             max_position: None,
             min_position: None,
+            intermediate_positions: Vec::new(),
+            per_section_max_velocity: None,
+            per_section_max_acceleration: None,
+            per_section_max_jerk: None,
+            per_section_min_velocity: None,
+            per_section_min_acceleration: None,
+            per_section_max_position: None,
+            per_section_min_position: None,
+            per_section_minimum_duration: None,
             per_dof_control_interface: None,
             per_dof_synchronization: None,
             minimum_duration: None,
             interrupt_calculation_duration: None,
         }
+    }
+
+    /// Like [`new`](InputParameter::new), but pre-allocates storage for up to
+    /// `max_number_of_waypoints` intermediate positions so that later waypoint
+    /// assignments do not need to grow the list
+    pub fn with_waypoints(dofs: Option<usize>, max_number_of_waypoints: usize) -> Self {
+        let mut input = Self::new(dofs);
+        input.intermediate_positions.reserve(max_number_of_waypoints);
+        input
     }
 
     #[inline]
@@ -325,6 +440,8 @@ impl<const DOF: usize> InputParameter<DOF> {
         check_current_state_within_limits: bool,
         check_target_state_within_limits: bool,
     ) -> Result<(), RuckigError> {
+        self.validate_waypoints::<E>(check_target_state_within_limits)?;
+
         for dof in 0..self.degrees_of_freedom {
             let j_max = self.max_jerk[dof];
             if j_max.is_nan() || j_max < 0.0 {
@@ -580,6 +697,226 @@ impl<const DOF: usize> InputParameter<DOF> {
         }
         Ok(())
     }
+
+    /// Validate the intermediate waypoints and per-section constraints
+    fn validate_waypoints<E: RuckigErrorHandler>(
+        &self,
+        check_target_state_within_limits: bool,
+    ) -> Result<(), RuckigError> {
+        let n_waypoints = self.intermediate_positions.len();
+        let n_sections = n_waypoints + 1;
+
+        // Fast path: nothing waypoint-related is set (keeps the plain
+        // state-to-state validation hot path free of the checks below)
+        if n_waypoints == 0
+            && self.per_section_max_velocity.is_none()
+            && self.per_section_max_acceleration.is_none()
+            && self.per_section_max_jerk.is_none()
+            && self.per_section_min_velocity.is_none()
+            && self.per_section_min_acceleration.is_none()
+            && self.per_section_max_position.is_none()
+            && self.per_section_min_position.is_none()
+            && self.per_section_minimum_duration.is_none()
+        {
+            return Ok(());
+        }
+
+        if n_waypoints > 0 {
+            if self.control_interface != ControlInterface::Position
+                || self.per_dof_control_interface.is_some()
+                || self.per_dof_synchronization.is_some()
+            {
+                return E::handle_validation_error("intermediate positions can only be used together with the position control interface and a global synchronization.");
+            }
+            if self.minimum_duration.is_some()
+                || self.duration_discretization != DurationDiscretization::Continuous
+            {
+                return E::handle_validation_error("intermediate positions can not be used together with a global minimum or discrete duration.");
+            }
+            for dof in 0..self.degrees_of_freedom {
+                if self.max_jerk[dof].is_infinite() {
+                    return E::handle_validation_error(&format!("infinite jerk limit of DoF {} is currently not supported with intermediate positions.", dof));
+                }
+            }
+
+            for (index, waypoint) in self.intermediate_positions.iter().enumerate() {
+                if waypoint.len() != self.degrees_of_freedom {
+                    return E::handle_validation_error(&format!(
+                        "intermediate position {} has {} DoFs, expected {}.",
+                        index,
+                        waypoint.len(),
+                        self.degrees_of_freedom
+                    ));
+                }
+                for dof in 0..self.degrees_of_freedom {
+                    let w = waypoint[dof];
+                    if !w.is_finite() {
+                        return E::handle_validation_error(&format!(
+                            "intermediate position {} of DoF {} should be a valid number.",
+                            index, dof
+                        ));
+                    }
+                    // Global position limits; per-section limits are checked below
+                    if let Some(max_pos) = &self.max_position {
+                        if w > max_pos[dof] {
+                            return E::handle_validation_error(&format!("intermediate position {} of DoF {} exceeds its maximum position limit {}.", index, dof, max_pos[dof]));
+                        }
+                    }
+                    if let Some(min_pos) = &self.min_position {
+                        if w < min_pos[dof] {
+                            return E::handle_validation_error(&format!("intermediate position {} of DoF {} undercuts its minimum position limit {}.", index, dof, min_pos[dof]));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Per-section constraint arrays must match the number of sections and
+        // follow the same per-DoF rules as their global counterparts
+        struct SectionArrayCheck {
+            name: &'static str,
+            is_min: bool, // min limits must be <= 0, max limits must be >= 0
+            is_position: bool,
+        }
+        let checks = [
+            ("per_section_max_velocity", &self.per_section_max_velocity, SectionArrayCheck { name: "maximum velocity", is_min: false, is_position: false }),
+            ("per_section_max_acceleration", &self.per_section_max_acceleration, SectionArrayCheck { name: "maximum acceleration", is_min: false, is_position: false }),
+            ("per_section_max_jerk", &self.per_section_max_jerk, SectionArrayCheck { name: "maximum jerk", is_min: false, is_position: false }),
+            ("per_section_min_velocity", &self.per_section_min_velocity, SectionArrayCheck { name: "minimum velocity", is_min: true, is_position: false }),
+            ("per_section_min_acceleration", &self.per_section_min_acceleration, SectionArrayCheck { name: "minimum acceleration", is_min: true, is_position: false }),
+            ("per_section_max_position", &self.per_section_max_position, SectionArrayCheck { name: "maximum position", is_min: false, is_position: true }),
+            ("per_section_min_position", &self.per_section_min_position, SectionArrayCheck { name: "minimum position", is_min: true, is_position: true }),
+        ];
+        for (field_name, array, check) in checks {
+            let Some(sections) = array else { continue };
+            if sections.len() != n_sections {
+                return E::handle_validation_error(&format!(
+                    "{} has {} entries, expected one per section ({}).",
+                    field_name,
+                    sections.len(),
+                    n_sections
+                ));
+            }
+            for (section, values) in sections.iter().enumerate() {
+                if values.len() != self.degrees_of_freedom {
+                    return E::handle_validation_error(&format!(
+                        "{} of section {} has {} DoFs, expected {}.",
+                        field_name,
+                        section,
+                        values.len(),
+                        self.degrees_of_freedom
+                    ));
+                }
+                for dof in 0..self.degrees_of_freedom {
+                    let value = values[dof];
+                    if value.is_nan() {
+                        return E::handle_validation_error(&format!(
+                            "per-section {} {} of section {}, DoF {} should be a valid number.",
+                            check.name, value, section, dof
+                        ));
+                    }
+                    if !check.is_position {
+                        if !check.is_min && value < 0.0 {
+                            return E::handle_validation_error(&format!("per-section {} limit {} of section {}, DoF {} should be larger than or equal to zero.", check.name, value, section, dof));
+                        }
+                        if check.is_min && value > 0.0 {
+                            return E::handle_validation_error(&format!("per-section {} limit {} of section {}, DoF {} should be smaller than or equal to zero.", check.name, value, section, dof));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Per-section position limits: consistent ranges, and each waypoint must
+        // lie within the limits of both adjacent sections
+        if self.per_section_max_position.is_some() || self.per_section_min_position.is_some() {
+            for section in 0..n_sections {
+                for dof in 0..self.degrees_of_freedom {
+                    let max_pos = self
+                        .per_section_max_position
+                        .as_ref()
+                        .map_or(f64::INFINITY, |v| v[section][dof]);
+                    let min_pos = self
+                        .per_section_min_position
+                        .as_ref()
+                        .map_or(f64::NEG_INFINITY, |v| v[section][dof]);
+                    if min_pos > max_pos {
+                        return E::handle_validation_error(&format!("per-section minimum position limit {} of section {}, DoF {} should be smaller than or equal to its maximum position limit {}.", min_pos, section, dof, max_pos));
+                    }
+                    // Waypoint k joins sections k-1 and k: it must satisfy both
+                    for waypoint_index in [section.checked_sub(1), Some(section)]
+                        .into_iter()
+                        .flatten()
+                    {
+                        if waypoint_index >= n_waypoints {
+                            continue;
+                        }
+                        let w = self.intermediate_positions[waypoint_index][dof];
+                        if w > max_pos || w < min_pos {
+                            return E::handle_validation_error(&format!("intermediate position {} of DoF {} violates the position limits [{}, {}] of adjacent section {}.", waypoint_index, dof, min_pos, max_pos, section));
+                        }
+                    }
+                }
+            }
+        }
+
+        // The target state must satisfy the limits of the last section
+        if check_target_state_within_limits {
+            let last = n_sections - 1;
+            for dof in 0..self.degrees_of_freedom {
+                if let Some(v) = &self.per_section_max_velocity {
+                    if self.target_velocity[dof] > v[last][dof] {
+                        return E::handle_validation_error(&format!("target velocity {} of DoF {} exceeds the maximum velocity limit {} of the last section.", self.target_velocity[dof], dof, v[last][dof]));
+                    }
+                }
+                if let Some(v) = &self.per_section_min_velocity {
+                    if self.target_velocity[dof] < v[last][dof] {
+                        return E::handle_validation_error(&format!("target velocity {} of DoF {} undercuts the minimum velocity limit {} of the last section.", self.target_velocity[dof], dof, v[last][dof]));
+                    }
+                }
+                if let Some(a) = &self.per_section_max_acceleration {
+                    if self.target_acceleration[dof] > a[last][dof] {
+                        return E::handle_validation_error(&format!("target acceleration {} of DoF {} exceeds the maximum acceleration limit {} of the last section.", self.target_acceleration[dof], dof, a[last][dof]));
+                    }
+                }
+                if let Some(a) = &self.per_section_min_acceleration {
+                    if self.target_acceleration[dof] < a[last][dof] {
+                        return E::handle_validation_error(&format!("target acceleration {} of DoF {} undercuts the minimum acceleration limit {} of the last section.", self.target_acceleration[dof], dof, a[last][dof]));
+                    }
+                }
+                if let Some(p) = &self.per_section_max_position {
+                    if self.target_position[dof] > p[last][dof] {
+                        return E::handle_validation_error(&format!("target position {} of DoF {} exceeds the maximum position limit {} of the last section.", self.target_position[dof], dof, p[last][dof]));
+                    }
+                }
+                if let Some(p) = &self.per_section_min_position {
+                    if self.target_position[dof] < p[last][dof] {
+                        return E::handle_validation_error(&format!("target position {} of DoF {} undercuts the minimum position limit {} of the last section.", self.target_position[dof], dof, p[last][dof]));
+                    }
+                }
+            }
+        }
+
+        if let Some(durations) = &self.per_section_minimum_duration {
+            if durations.len() != n_sections {
+                return E::handle_validation_error(&format!(
+                    "per_section_minimum_duration has {} entries, expected one per section ({}).",
+                    durations.len(),
+                    n_sections
+                ));
+            }
+            for (section, duration) in durations.iter().enumerate() {
+                if !duration.is_finite() || *duration < 0.0 {
+                    return E::handle_validation_error(&format!(
+                        "per-section minimum duration {} of section {} should be a non-negative number.",
+                        duration, section
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
@@ -673,6 +1010,51 @@ impl<const DOF: usize> fmt::Display for InputParameter<DOF> {
                 f,
                 "inp.min_position = [{}]",
                 join::<DOF>(min_pos.deref(), true)
+            )?;
+        }
+
+        fn write_sections<const DOF: usize>(
+            f: &mut fmt::Formatter,
+            name: &str,
+            sections: &[DataArrayOrVec<f64, DOF>],
+        ) -> fmt::Result {
+            write!(f, "inp.{} = [", name)?;
+            for (i, section) in sections.iter().enumerate() {
+                let separator = if i > 0 { ", " } else { "" };
+                write!(f, "{}[{}]", separator, join::<DOF>(section.deref(), true))?;
+            }
+            writeln!(f, "]")
+        }
+
+        if !self.intermediate_positions.is_empty() {
+            write_sections(f, "intermediate_positions", &self.intermediate_positions)?;
+        }
+        if let Some(v) = &self.per_section_max_velocity {
+            write_sections(f, "per_section_max_velocity", v)?;
+        }
+        if let Some(v) = &self.per_section_max_acceleration {
+            write_sections(f, "per_section_max_acceleration", v)?;
+        }
+        if let Some(v) = &self.per_section_max_jerk {
+            write_sections(f, "per_section_max_jerk", v)?;
+        }
+        if let Some(v) = &self.per_section_min_velocity {
+            write_sections(f, "per_section_min_velocity", v)?;
+        }
+        if let Some(v) = &self.per_section_min_acceleration {
+            write_sections(f, "per_section_min_acceleration", v)?;
+        }
+        if let Some(v) = &self.per_section_max_position {
+            write_sections(f, "per_section_max_position", v)?;
+        }
+        if let Some(v) = &self.per_section_min_position {
+            write_sections(f, "per_section_min_position", v)?;
+        }
+        if let Some(durations) = &self.per_section_minimum_duration {
+            writeln!(
+                f,
+                "inp.per_section_minimum_duration = [{}]",
+                join::<0>(durations, false)
             )?;
         }
 

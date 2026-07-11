@@ -6,16 +6,17 @@
 </div>
 
 This is a Rust port of the repository https://github.com/pantor/ruckig/. Cloud client and most pro-features are not
-ported. However, this port implements its own equivalents of two Ruckig Pro features: **position limits**
-(`min_position` / `max_position`) and a **tracking interface** (`Trackig`) for following a moving target signal. The
+ported. However, this port implements its own equivalents of three Ruckig Pro features: **position limits**
+(`min_position` / `max_position`), a **tracking interface** (`Trackig`) for following a moving target signal, and
+**intermediate waypoints** (`intermediate_positions`) calculated locally by a pass-through waypoint solver. The
 examples use Gnuplot to illustrate the trajectories.
 
 Ruckig generates trajectories on-the-fly, allowing robots and machines to react instantaneously to sensor input. Ruckig
 calculates a trajectory to a _target_ state (with position, velocity, and acceleration) starting from _any_ initial
 state limited by velocity, acceleration, and jerk constraints. For these state-to-state motions, Ruckig guarantees a
-time-optimal solution. On top of that, this port can restrict the workspace with per-DoF _position limits_ and follow a
-moving target signal with the _tracking interface_. Intermediate waypoints (a Ruckig Pro / cloud feature) are not
-supported.
+time-optimal solution. On top of that, this port can restrict the workspace with per-DoF _position limits_, follow a
+moving target signal with the _tracking interface_, and generate multi-section trajectories through _intermediate
+waypoints_ (without stopping at them; not time-optimal — see below).
 
 More information can be found at [ruckig.com](https://ruckig.com) and in the corresponding
 paper [Jerk-limited Real-time Trajectory Generation with Arbitrary Target States](https://arxiv.org/abs/2105.04830),
@@ -28,6 +29,8 @@ accepted for the _Robotics: Science and Systems (RSS), 2021_ conference.
 - **Position Limits**: Restrict the workspace with `min_position` / `max_position` - the generated trajectory is
   guaranteed to stay inside the limits, or a `ErrorPositionalLimits` result is returned (never a silent violation).
 - **Tracking Interface**: Follow a moving target signal with the `Trackig` struct under full kinematic constraints.
+- **Intermediate Waypoints**: Pass through a list of `intermediate_positions` without stopping, with optional
+  per-section kinematic limits and minimum durations - calculated locally, no cloud API involved.
 - **Customizable Error Handling**: Implement your own error handling strategies using the `RuckigErrorHandler` trait.
 - **no-std support**: Run this library on embedded systems without the standard library (still requires `alloc`)
 
@@ -445,7 +448,7 @@ new_acceleration: DataArrayOrVec<f64, DOF>;
 trajectory: Trajectory; // The current trajectory
 time: f64; // The current, auto-incremented time. Reset to 0 at a new calculation.
 
-new_section: usize; // Index of the trajectory section (always 0 in this port - reserved for intermediate waypoints)
+new_section: usize; // Index of the current section between two waypoints of the trajectory
 did_section_change: bool; // Was a new section reached in the last cycle?
 
 new_calculation: bool; // Whether a new calculation was performed in the last cycle
@@ -554,6 +557,80 @@ Properties:
 
 See `samples/src/example_tracking_1dof.rs` for a complete example.
 
+### Intermediate Waypoints
+
+Upstream ruckig calculates intermediate waypoints only in the Pro version or via its (non-real-time) cloud API. This
+port implements a **local pass-through waypoint solver** instead: a pass-through kinematic state at every waypoint is
+chosen heuristically, the sections between the waypoints are chained as state-to-state calculations, and a bounded
+local refinement (pattern search over the waypoint velocities and accelerations, each candidate validated by a full
+solver call) then minimizes the total duration. The resulting trajectory is feasible, respects all limits, and is
+smooth (position, velocity and acceleration are continuous), but - in contrast to a globally optimal joint
+optimization over all sections - **not guaranteed time-optimal** (that problem is NP-hard; even Ruckig Pro does not
+guarantee time-optimality with waypoints). Cross-validation against the upstream cloud API (the Ruckig Pro solver) on
+42 random 3-DoF chains with 1-5 waypoints measured trajectory durations within 1.4% of the proprietary optimizer on
+average (worst case 7.3%).
+
+```rust
+use rsruckig::prelude::*;
+
+// Pre-allocate for up to 8 waypoints (optional - plain `new` works too)
+let mut otg = Ruckig::<3, ThrowErrorHandler>::with_waypoints(None, 0.01, 8);
+let mut input = InputParameter::<3>::with_waypoints(None, 8);
+let mut output = OutputParameter::<3>::with_waypoints(None, 8);
+
+input.intermediate_positions.push(daov_stack![1.4, -1.6, 1.0]);
+input.intermediate_positions.push(daov_stack![-0.6, -0.5, 0.4]);
+input.target_position = daov_stack![0.5, 1.2, 0.0];
+input.max_velocity = daov_stack![3.0, 2.0, 3.0];
+input.max_acceleration = daov_stack![6.0, 4.0, 4.0];
+input.max_jerk = daov_stack![16.0, 10.0, 20.0]; // finite jerk limits are required with waypoints
+
+while otg.update(&input, &mut output).unwrap() == RuckigResult::Working {
+    if output.did_section_change {
+        println!("passed waypoint, now in section {}", output.new_section);
+    }
+    output.pass_to_input(&mut input);
+}
+```
+
+Behavior and semantics:
+
+- Waypoints are passed **without stopping**: the pass-through velocity and acceleration of each DoF are chosen by the
+  refinement to minimize the total duration (e.g. a direction reversal may be passed with a small overshoot-and-return
+  instead of a full stop when that is faster).
+- Sections are time-synchronized, so all DoFs reach each waypoint simultaneously. `output.new_section` and
+  `output.did_section_change` report the progress; `trajectory.get_intermediate_durations()` returns the absolute
+  times at which the waypoints are reached.
+- Waypoints require the position control interface, a global (not per-DoF) synchronization, finite jerk limits, and
+  no global `minimum_duration` / discrete durations.
+- If a heuristic pass-through velocity turns out infeasible for a section, it is automatically degraded (down to a
+  full stop at that waypoint) before an error is reported.
+- `otg.waypoint_refinement_sweeps` (default 4) trades trajectory quality against calculation time. A 4-waypoint 3-DoF
+  calculation takes a few milliseconds with the default; `0` disables refinement and uses the raw conservative
+  heuristic chain (fastest calculation, roughly 10-30% longer trajectories). The refinement runs only when a
+  trajectory is (re)calculated, not in every control cycle.
+
+Optional per-section constraints (each `Option<Vec<...>>` with one entry per section, i.e.
+`intermediate_positions.len() + 1`):
+
+| Field                                                        | Overwrites                        |
+| ------------------------------------------------------------ | --------------------------------- |
+| `per_section_max_velocity` / `per_section_min_velocity`      | `max_velocity` / `min_velocity`   |
+| `per_section_max_acceleration` / `per_section_min_acceleration` | `max_acceleration` / `min_acceleration` |
+| `per_section_max_jerk`                                       | `max_jerk`                        |
+| `per_section_max_position` / `per_section_min_position`      | `max_position` / `min_position`   |
+| `per_section_minimum_duration`                               | minimum duration of each section  |
+
+A helper for removing insignificant waypoints is also ported from upstream:
+
+```rust
+// Drop waypoints that lie within a per-DoF threshold of the line between their neighbors
+input.intermediate_positions = otg.filter_intermediate_positions(&input, &daov_stack![0.1, 0.1, 0.1]);
+```
+
+The tracking interface (`Trackig`) does not support intermediate waypoints. See
+`samples/src/example_waypoints_3dof.rs` for a complete example.
+
 ## Tests and Numerical Stability
 
 The upstream C++ test suite validates over 5.000.000.000 random trajectories as well as many additional edge cases;
@@ -574,8 +651,16 @@ numerical range and improve reliability.
 Original Ruckig is written in C++17. It is continuously tested on `ubuntu-latest`, `macos-latest`, and `windows-latest`
 against following versions
 
-Rust version is a port of the original C++ community version, excluding the cloud client. Two Ruckig Pro features -
-position limits and the tracking interface - are implemented independently in this port.
+Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
+position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
+
+### Breaking changes in 3.0.0
+
+- `Trajectory::cumulative_times` is now a `Vec<f64>` with one entry per section (it was a DoF-sized
+  `DataArrayOrVec<f64, DOF>` that only ever held one meaningful value), and
+  `Trajectory::get_intermediate_durations()` returns `&[f64]` accordingly.
+- `OutputParameter::new_section` is now actually filled with the current section index during `update` (it was
+  documented as "always 0 in this port" before).
 
 ## Rust port TODOs
 
@@ -584,7 +669,7 @@ position limits and the tracking interface - are implemented independently in th
 - [x] Add more examples
 - [x] Position limits (`min_position` / `max_position`)
 - [x] Tracking interface (`Trackig`)
-- [ ] Intermediate waypoints
+- [x] Intermediate waypoints (local pass-through solver)
 - [ ] Add more documentation
 - [ ] Further optimisation of performance
 

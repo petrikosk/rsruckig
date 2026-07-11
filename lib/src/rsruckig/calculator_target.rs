@@ -753,6 +753,10 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         traj: &mut Trajectory<DOF>,
         delta_time: f64,
     ) -> Result<RuckigResult, RuckigError> {
+        // A state-to-state trajectory has exactly one section; shrink a
+        // trajectory that previously held intermediate waypoints
+        traj.resize_sections(1);
+
         // Initialize per-dof control interface and synchronization once before the loop
         for i in 0..self.degrees_of_freedom {
             self.inp_per_dof_control_interface[i] = inp.control_interface;

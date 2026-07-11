@@ -12,9 +12,11 @@ use crate::alloc::{vec, vec::Vec};
 // We'll use Vec<T> instead of CustomVector<T, DOF>
 #[derive(Debug, Clone)]
 pub struct Trajectory<const DOF: usize> {
+    /// Profiles per section (one entry per section between waypoints) and DoF
     pub profiles: Vec<DataArrayOrVec<Profile, DOF>>,
     pub duration: f64,
-    pub cumulative_times: DataArrayOrVec<f64, DOF>,
+    /// Absolute end time of each section; the last entry equals `duration`
+    pub cumulative_times: Vec<f64>,
     pub independent_min_durations: DataArrayOrVec<f64, DOF>,
     position_extrema: DataArrayOrVec<Bound, DOF>,
     degrees_of_freedom: usize,
@@ -25,7 +27,7 @@ impl<const DOF: usize> Default for Trajectory<DOF> {
         Self {
             profiles: vec![DataArrayOrVec::new(None, Profile::default())],
             duration: Default::default(),
-            cumulative_times: DataArrayOrVec::new(None, 0.0),
+            cumulative_times: vec![0.0],
             independent_min_durations: DataArrayOrVec::new(None, 0.0),
             position_extrema: DataArrayOrVec::new(None, Bound::default()),
             degrees_of_freedom: DOF,
@@ -41,10 +43,35 @@ impl<const DOF: usize> Trajectory<DOF> {
                 Profile::default(),
             )],
             duration: 0.0,
-            cumulative_times: DataArrayOrVec::new(dofs, 0.0),
+            cumulative_times: vec![0.0],
             independent_min_durations: DataArrayOrVec::new(dofs, 0.0),
             position_extrema: DataArrayOrVec::new(dofs, Bound::default()),
             degrees_of_freedom: dofs.unwrap_or(DOF),
+        }
+    }
+
+    /// Resize to `sections` sections, reusing existing storage where possible
+    pub(crate) fn resize_sections(&mut self, sections: usize) {
+        let dofs = if DOF == 0 {
+            Some(self.degrees_of_freedom)
+        } else {
+            None
+        };
+        self.profiles
+            .resize_with(sections, || DataArrayOrVec::new(dofs, Profile::default()));
+        self.cumulative_times.resize(sections, 0.0);
+    }
+
+    /// Pre-allocate storage for a trajectory with up to `sections` sections
+    /// (i.e. `sections - 1` intermediate waypoints) to avoid allocations during
+    /// later calculations
+    pub fn reserve_sections(&mut self, sections: usize) {
+        if sections > self.profiles.len() {
+            self.profiles.reserve(sections - self.profiles.len());
+        }
+        if sections > self.cumulative_times.len() {
+            self.cumulative_times
+                .reserve(sections - self.cumulative_times.len());
         }
     }
 
@@ -198,8 +225,10 @@ impl<const DOF: usize> Trajectory<DOF> {
         self.duration
     }
 
+    /// Absolute times at which the intermediate waypoints are reached (one
+    /// entry per section; the last entry equals the total duration)
     #[inline]
-    pub fn get_intermediate_durations(&self) -> &DataArrayOrVec<f64, { DOF }> {
+    pub fn get_intermediate_durations(&self) -> &[f64] {
         &self.cumulative_times
     }
 
@@ -235,11 +264,15 @@ impl<const DOF: usize> Trajectory<DOF> {
             return None;
         }
 
-        let time; // Or any default value
-        for p in &self.profiles {
+        for (section, p) in self.profiles.iter().enumerate() {
             if let Some((returned_time, _, _)) = p[dof].get_first_state_at_position(position, 0.0) {
-                time = returned_time;
-                return Some(time);
+                // Profile times are section-local; offset by the section start
+                let t_offset = if section > 0 {
+                    self.cumulative_times[section - 1]
+                } else {
+                    0.0
+                };
+                return Some(returned_time + t_offset);
             }
         }
         None

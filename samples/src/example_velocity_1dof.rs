@@ -43,6 +43,13 @@ fn main() {
     println!("Max calculation duration: {} µs", max_calculation_duration);
 
     let mut fg = Figure::new();
+    // gnuplot 6 on Windows defaults to the qt terminal, which cannot draw over
+    // a pipe (gnuplot bug #1426: black/empty window) - use the native windows
+    // terminal instead, unless the user picked one explicitly via GNUTERM
+    #[cfg(windows)]
+    if std::env::var_os("GNUTERM").is_none() {
+        fg.set_terminal("windows", "");
+    }
     let chart_title = format!(
         "S-Curve Velocity Motion Profile. Max. calc duration {} µs",
         max_calculation_duration

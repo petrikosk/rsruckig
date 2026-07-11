@@ -59,6 +59,7 @@ mod alloc {
 pub mod block;
 pub mod brake;
 pub mod calculator_target;
+pub mod calculator_waypoints;
 pub mod error;
 pub mod input_parameter;
 pub mod output_parameter;

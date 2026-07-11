@@ -10,12 +10,16 @@
 //! - The error handler strategy for customized error handling
 
 use crate::calculator_target::TargetCalculator;
+use crate::calculator_waypoints::{WaypointsCalculator, DEFAULT_REFINEMENT_SWEEPS};
 use crate::error::{RuckigError, RuckigErrorHandler};
 use crate::input_parameter::{DurationDiscretization, InputParameter};
 use crate::output_parameter::OutputParameter;
 use crate::result::RuckigResult;
 use crate::trajectory::Trajectory;
+use crate::util::DataArrayOrVec;
 use core::marker::PhantomData;
+
+use crate::alloc::vec::Vec;
 
 // Instant is not available in core
 #[cfg(feature = "std")]
@@ -77,6 +81,15 @@ pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
     current_input: InputParameter<DOF>,
     current_input_initialized: bool,
     pub calculator: TargetCalculator<DOF>,
+    /// Calculator for trajectories through intermediate waypoints, created
+    /// lazily on the first waypoint calculation (or eagerly by
+    /// [`with_waypoints`](Ruckig::with_waypoints))
+    waypoints_calculator: Option<WaypointsCalculator<DOF>>,
+    /// Number of local refinement sweeps over the waypoint pass-through states
+    /// per waypoint calculation. More sweeps yield trajectories closer to
+    /// time-optimal at the cost of calculation time; `0` disables refinement
+    /// and uses the raw (conservative) heuristic chain.
+    pub waypoint_refinement_sweeps: usize,
     pub degrees_of_freedom: usize,
     pub delta_time: f64,
     _error_handler: PhantomData<E>,
@@ -112,10 +125,115 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
             current_input: InputParameter::new(degrees_of_freedom),
             current_input_initialized: false,
             calculator: TargetCalculator::new(degrees_of_freedom),
+            waypoints_calculator: None,
+            waypoint_refinement_sweeps: DEFAULT_REFINEMENT_SWEEPS,
             degrees_of_freedom: degrees_of_freedom.unwrap_or(DOF),
             delta_time,
             _error_handler: PhantomData,
         }
+    }
+
+    /// Like [`new`](Ruckig::new), but pre-allocates storage for trajectories
+    /// with up to `max_number_of_waypoints` intermediate positions, so that
+    /// waypoint calculations do not allocate on the first call
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rsruckig::prelude::*;
+    ///
+    /// let mut otg = Ruckig::<3, ThrowErrorHandler>::with_waypoints(None, 0.01, 8);
+    /// let mut input = InputParameter::<3>::with_waypoints(None, 8);
+    /// let mut output = OutputParameter::<3>::with_waypoints(None, 8);
+    /// ```
+    pub fn with_waypoints(
+        degrees_of_freedom: Option<usize>,
+        delta_time: f64,
+        max_number_of_waypoints: usize,
+    ) -> Self {
+        let mut otg = Self::new(degrees_of_freedom, delta_time);
+        otg.current_input
+            .intermediate_positions
+            .reserve(max_number_of_waypoints);
+        otg.waypoints_calculator = Some(WaypointsCalculator::with_waypoints(
+            degrees_of_freedom,
+            max_number_of_waypoints,
+        ));
+        otg
+    }
+
+    /// Filter intermediate positions that lie within a per-DoF
+    /// `threshold_distance` of the linear interpolation between their
+    /// neighboring (kept) positions, including the current and target position
+    /// as outer anchors. Returns the filtered list, which can be assigned back
+    /// to `input.intermediate_positions`.
+    ///
+    /// Faithful port of the upstream ruckig algorithm: a running intersection
+    /// of the per-DoF line-parameter intervals decides whether all skipped
+    /// waypoints stay within the threshold corridor. Note that a DoF with zero
+    /// extent between the anchors (`pos_end == pos_start`) yields NaN interval
+    /// bounds, which `f64::max`/`f64::min` ignore — such a DoF is effectively
+    /// unconstrained, matching the upstream behavior.
+    pub fn filter_intermediate_positions(
+        &self,
+        input: &InputParameter<DOF>,
+        threshold_distance: &DataArrayOrVec<f64, DOF>,
+    ) -> Vec<DataArrayOrVec<f64, DOF>> {
+        if input.intermediate_positions.is_empty() {
+            return input.intermediate_positions.clone();
+        }
+
+        let n_waypoints = input.intermediate_positions.len();
+        let mut is_active = crate::alloc::vec![true; n_waypoints];
+
+        let mut start = 0_usize;
+        for end in 2..n_waypoints + 2 {
+            let pos_start = if start == 0 {
+                &input.current_position
+            } else {
+                &input.intermediate_positions[start - 1]
+            };
+            let pos_end = if end == n_waypoints + 1 {
+                &input.target_position
+            } else {
+                &input.intermediate_positions[end - 1]
+            };
+
+            let mut are_all_below = true;
+            'current: for current in start + 1..end {
+                let pos_current = &input.intermediate_positions[current - 1];
+
+                let mut t_start_max = 0.0_f64;
+                let mut t_end_min = 1.0_f64;
+                for dof in 0..self.degrees_of_freedom {
+                    let extent = pos_end[dof] - pos_start[dof];
+                    let h0 = (pos_current[dof] - pos_start[dof]) / extent;
+                    let t_start = h0 - threshold_distance[dof] / extent.abs();
+                    let t_end = h0 + threshold_distance[dof] / extent.abs();
+
+                    t_start_max = t_start.max(t_start_max);
+                    t_end_min = t_end.min(t_end_min);
+
+                    if t_start_max > t_end_min {
+                        are_all_below = false;
+                        break 'current;
+                    }
+                }
+            }
+
+            is_active[end - 2] = !are_all_below;
+            if !are_all_below {
+                start = end - 1;
+            }
+        }
+
+        let mut filtered_positions = Vec::with_capacity(n_waypoints);
+        for (waypoint, active) in input.intermediate_positions.iter().zip(&is_active) {
+            if *active {
+                filtered_positions.push(waypoint.clone());
+            }
+        }
+        filtered_positions
     }
 
     /// Reset the internal state of the Ruckig instance
@@ -214,6 +332,19 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     ) -> Result<RuckigResult, RuckigError> {
         self.validate_input(input, false, true)?;
 
+        if !input.intermediate_positions.is_empty() {
+            let dofs = if DOF == 0 {
+                Some(self.degrees_of_freedom)
+            } else {
+                None
+            };
+            let wc = self
+                .waypoints_calculator
+                .get_or_insert_with(|| WaypointsCalculator::new(dofs));
+            wc.refinement_sweeps = self.waypoint_refinement_sweeps;
+            return wc.calculate::<E>(input, traj, self.delta_time);
+        }
+
         self.calculator.calculate::<E>(input, traj, self.delta_time)
     }
 
@@ -288,6 +419,8 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
             }
 
             output.time = 0.0; // reset sampling time for the newly calculated trajectory
+            output.new_section = 0; // the new trajectory starts in its first section
+            output.did_section_change = false;
             output.new_calculation = true;
             // In-place copy reuses `current_input`'s storage instead of allocating fresh
             // Vecs on every retarget (heap mode). Must stay in sync with InputParameter's
@@ -298,14 +431,16 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
 
         let old_section = output.new_section;
         output.time += self.delta_time;
+        let mut new_section = Some(output.new_section);
         output.trajectory.at_time(
             output.time,
             &mut Some(&mut output.new_position),
             &mut Some(&mut output.new_velocity),
             &mut Some(&mut output.new_acceleration),
             &mut Some(&mut output.new_jerk),
-            &mut Some(output.new_section),
+            &mut new_section,
         );
+        output.new_section = new_section.unwrap_or(old_section);
         output.did_section_change = output.new_section > old_section; // Report only forward section changes
 
         #[cfg(feature = "std")]
