@@ -648,6 +648,14 @@ against following versions
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
 
+### Fixes in 3.0.1
+
+- `Trackig`: the sample time is now clamped to the duration of the freshly calculated trajectory. A target that
+  is reachable in less than one cycle (a moving target the output lags by less than one cycle's travel) produced
+  a sub-cycle plan that was sampled at `delta_time`, i.e. extrapolated past the target at constant velocity; every
+  such lag was a fixed point of the tracking loop and the output never converged onto the target (it drifted by
+  `j*L^3/(32*v^3)` per cycle). `update` now returns `Finished` when the plan completes within the cycle.
+
 ### Breaking changes in 3.0.0
 
 - `Trajectory::cumulative_times` is now a `Vec<f64>` with one entry per section (it was a DoF-sized

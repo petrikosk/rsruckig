@@ -160,3 +160,49 @@ fn test_tracking_target_filter() {
     }
     assert!((output.new_position[0] - 0.5).abs() < 1e-3);
 }
+
+#[test]
+fn test_tracking_sub_cycle_lag_converges() {
+    // Regression: a moving target that the output lags by LESS than one cycle's
+    // travel is reachable in less than one cycle. The tracker used to sample the
+    // (sub-cycle) plan at delta_time regardless, extrapolating the final state
+    // at constant velocity past the target, so the output advanced exactly as
+    // much as the target and every such lag was a fixed point of the loop (with
+    // a slow forward drift of j*L^3/(32 v^3) per cycle from the jerk bump of the
+    // minimum-time profile). The sample time must be clamped to the plan.
+    const DT: f64 = 0.004;
+    const V: f64 = 50.0;
+    let mut otg = Trackig::<1, IgnoreErrorHandler>::new(None, DT);
+    let mut input = InputParameter::<1>::new(None);
+    let mut output = OutputParameter::<1>::new(None);
+    input.synchronization = Synchronization::None;
+    input.max_velocity = daov_stack![500.0];
+    input.max_acceleration = daov_stack![5000.0];
+    input.max_jerk = daov_stack![50000.0];
+    // start half a cycle of travel behind the stream, already at stream speed
+    input.current_position = daov_stack![-0.0988];
+    input.current_velocity = daov_stack![V];
+    input.current_acceleration = daov_stack![0.0];
+
+    let mut target = TargetState::<1>::new(None);
+    target.velocity[0] = V;
+    let mut err_at_100 = 0.0;
+    for k in 0..400 {
+        // the sample the tracker sees this cycle: the stream at this instant
+        target.position[0] = k as f64 * V * DT;
+        otg.update(&target, &input, &mut output).unwrap();
+        output.pass_to_input(&mut input);
+
+        let err = output.new_position[0] - target.position[0];
+        if k == 100 {
+            err_at_100 = err;
+        }
+        if k >= 100 {
+            // on the target, not frozen at the initial lag
+            assert!(err.abs() < 1e-9, "cycle {k}: error {err}");
+            // and not drifting either
+            assert!((err - err_at_100).abs() < 1e-12, "cycle {k}: drift {}", err - err_at_100);
+        }
+    }
+    assert!((output.new_velocity[0] - V).abs() < 1e-9);
+}

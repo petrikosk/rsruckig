@@ -381,7 +381,13 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
         if result == RuckigResult::Working {
             self.store_fallback(&output.trajectory);
             self.have_fallback = true;
-            self.time_along_trajectory = self.delta_time;
+            // Never sample past the end of the plan. A target that is reachable
+            // in less than one cycle (e.g. a moving target the output lags by
+            // less than one cycle's travel) yields a trajectory shorter than
+            // delta_time; sampling at delta_time would extrapolate the final
+            // state at constant velocity past the target, so every such lag
+            // would be a fixed point of the tracking loop.
+            self.time_along_trajectory = self.delta_time.min(output.trajectory.get_duration());
             output.new_calculation = true;
         } else {
             if !self.have_fallback {
@@ -425,7 +431,9 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
             return Ok(result);
         }
 
-        if output.time > output.trajectory.get_duration() {
+        // >= : the sample time is clamped to the plan duration above, so a plan
+        // that completes within this cycle is sampled exactly at its end
+        if output.time >= output.trajectory.get_duration() {
             return Ok(RuckigResult::Finished);
         }
 
