@@ -5,6 +5,8 @@ use crate::profile::{ControlSigns, Profile, ReachedLimits};
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
+/// Step 2 solver for the third-order velocity interface: calculates a profile
+/// with the synchronized duration `tf`.
 pub struct VelocityThirdOrderStep2 {
     a0: f64,
     tf: f64,
@@ -17,6 +19,9 @@ pub struct VelocityThirdOrderStep2 {
 }
 
 impl VelocityThirdOrderStep2 {
+    /// Create a solver for changing from state `(v0, a0)` to `(vf, af)` in
+    /// duration `tf` within the acceleration limits `[a_min, a_max]` and
+    /// maximal jerk `j_max`.
     pub fn new(
         tf: f64,
         v0: f64,
@@ -178,6 +183,12 @@ impl VelocityThirdOrderStep2 {
             || self.time_none(profile, a_max, a_min, j_max)
     }
 
+    /// Calculate a profile that reaches the target in exactly the duration
+    /// `tf` given to [`Self::new`].
+    ///
+    /// The phase durations are written into `profile`, whose boundary state
+    /// and pre-trajectories must already be set. Returns `false` if no valid
+    /// profile with that duration exists within the limits.
     pub fn get_profile(&mut self, profile: &mut Profile) -> bool {
         // Test all cases to get ones that match
         // However we should guess which one is correct and try them first...

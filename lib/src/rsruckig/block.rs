@@ -5,14 +5,25 @@ use core::f64;
 use core::fmt;
 use core::option::Option;
 
+/// The set of feasible durations of a single degree of freedom, as found by step 1.
+///
+/// Every duration `t >= t_min` is feasible except those inside the (at most two)
+/// blocked intervals `a` and `b`.
 #[derive(Clone, Default, Debug)]
 pub struct Block {
+    /// The time-optimal (fastest) profile.
     pub p_min: Profile,
+    /// Duration of `p_min`, including any brake and acceleration pre-trajectories.
     pub t_min: f64,
+    /// First blocked interval, if any.
     pub a: Option<Interval>,
+    /// Second blocked interval, if any.
     pub b: Option<Interval>,
 }
 
+/// Removes the profile at `index` from the first `valid_profile_counter` entries
+/// of `valid_profiles`, shifting the following profiles down and decrementing the
+/// counter.
 #[inline]
 pub fn remove_profile(
     valid_profiles: &mut [Profile; 6],
@@ -40,6 +51,8 @@ impl Block {
             .map(|interval| &interval.profile)
     }
 
+    /// Sets `profile` as the fastest profile, updates `t_min` accordingly and
+    /// clears both blocked intervals.
     #[inline]
     pub fn set_min_profile(&mut self, profile: &Profile) {
         self.p_min = *profile;
@@ -48,6 +61,14 @@ impl Block {
         self.b = None;
     }
 
+    /// Builds `block` from the valid step-1 profiles.
+    ///
+    /// The fastest profile becomes `p_min`, and the remaining profiles are paired
+    /// into blocked intervals. Near-duplicate profiles (caused by numerical
+    /// issues) are removed first. If `numerical_robust` is `true` (the default
+    /// when `None`), two distinct profiles are accepted as a minimum plus one
+    /// blocked interval. Returns `false` if the profile count cannot be
+    /// interpreted as a valid block.
     #[inline]
     #[allow(clippy::if_same_then_else)]
     pub fn calculate_block(
@@ -208,6 +229,8 @@ impl Block {
         }
     }
 
+    /// Returns `true` if the duration `t` is infeasible, i.e. shorter than
+    /// `t_min` or strictly inside one of the blocked intervals.
     #[inline]
     pub fn is_blocked(&self, t: f64) -> bool {
         if t < self.t_min {
@@ -226,6 +249,9 @@ impl Block {
         false
     }
 
+    /// Returns the step-1 profile that is valid for durations up to `t`: the
+    /// profile at the right end of the last blocked interval lying before `t`,
+    /// or `p_min` if there is none.
     #[inline]
     pub fn get_profile(&self, t: f64) -> &Profile {
         if let Some(b) = &self.b {
@@ -255,14 +281,19 @@ impl fmt::Display for Block {
     }
 }
 
+/// An open interval of infeasible (blocked) durations.
 #[derive(Debug, Clone, Default)]
 pub struct Interval {
+    /// Lower duration bound (exclusive).
     pub left: f64,
+    /// Upper duration bound (exclusive).
     pub right: f64,
+    /// The profile at the right end of the interval.
     pub profile: Profile,
 }
 
 impl Interval {
+    /// Creates an interval between `left` and `right` with a default profile.
     pub fn new(left: f64, right: f64) -> Self {
         Self {
             left,
@@ -271,6 +302,8 @@ impl Interval {
         }
     }
 
+    /// Creates the interval spanned by the total durations of two profiles,
+    /// storing the slower (right-end) profile.
     #[inline]
     pub fn from_profiles(profile_left: &Profile, profile_right: &Profile) -> Self {
         let left_duration =

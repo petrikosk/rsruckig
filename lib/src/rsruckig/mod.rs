@@ -7,6 +7,35 @@
 //! - Error handling through the [`error::RuckigErrorHandler`] trait
 //! - Collection types like [`util::DataArrayOrVec`]
 //!
+//! ## Quick Start
+//!
+//! ```
+//! use rsruckig::prelude::*;
+//!
+//! // 1 DoF, stack allocated, 10 ms control cycle
+//! let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+//! let mut input = InputParameter::new(None);
+//! let mut output = OutputParameter::new(None);
+//!
+//! input.current_position = daov_stack![0.0];
+//! input.target_position = daov_stack![1.0];
+//! input.max_velocity = daov_stack![1.0];
+//! input.max_acceleration = daov_stack![2.0];
+//! input.max_jerk = daov_stack![5.0];
+//!
+//! // Online: step the trajectory once per control cycle
+//! while otg.update(&input, &mut output).unwrap() == RuckigResult::Working {
+//!     output.pass_to_input(&mut input);
+//! }
+//! assert!((output.new_position[0] - 1.0).abs() < 1e-9);
+//!
+//! // Offline: calculate the whole trajectory at once
+//! let mut trajectory = Trajectory::new(None);
+//! otg.calculate(&input, &mut trajectory).unwrap();
+//! ```
+//!
+//! Tracking a moving target signal is provided by [`trackig::Trackig`].
+//!
 //! ## Main Components
 //!
 //! The main components you'll interact with are:
@@ -40,6 +69,7 @@
 //! - Acceleration control: Control the acceleration directly
 
 #![allow(clippy::too_many_arguments)]
+#![warn(missing_docs)]
 
 #![no_std]
 

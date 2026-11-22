@@ -666,6 +666,21 @@ against following versions
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
 
+### Fixes in 3.1.1
+
+Three calculations failed with `error in step 1` for valid inputs (upstream Ruckig fails for them as well). All
+fixes are fallbacks that only run when no profile was found, so the results of all other inputs are unchanged.
+
+- Position interface: re-planning from a state on the final jerk phase of a profile with high limits (remaining
+  durations of milliseconds). The coefficients of the quartic for the durations fall below the machine epsilon
+  there, the solver took them for zero and dropped the root. The quartic is now solved relative to the magnitude of
+  its roots in that case (`roots::solve_quart_monic_scaled`).
+- Velocity interface: an initial acceleration exactly at its limit with a velocity difference for which the
+  acceleration just touches the opposite limit. Both the profile without an acceleration plateau (peak beyond the
+  limit by rounding) and the one with a plateau (shorter than the machine epsilon) were rejected.
+- Velocity interface: acceleration limits of some thousands, where integrating the first phase missed the limit it
+  reaches by construction by more than the absolute tolerance.
+
 ### Changes in 3.1.0
 
 - New: `Trajectory::state_at` and `Trajectory::at_times` return the kinematic state as a `KinematicState` value;

@@ -21,40 +21,64 @@ const A_PRECISION: f64 = 1e-10;
 
 const T_MAX: f64 = 1e12;
 
+/// The kinematic limits that a profile reaches.
+///
+/// `Acc0` is the acceleration limit in the first (acceleration) part of the
+/// profile, `Acc1` the limit in the last (deceleration) part, and `Vel` the
+/// velocity limit in the cruise phase.
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum ReachedLimits {
+    /// Both acceleration limits and the velocity limit.
     Acc0Acc1Vel,
+    /// Only the velocity limit.
     Vel,
+    /// Only the first acceleration limit.
     Acc0,
+    /// Only the second acceleration limit.
     Acc1,
+    /// Both acceleration limits.
     Acc0Acc1,
+    /// The first acceleration limit and the velocity limit.
     Acc0Vel,
+    /// The second acceleration limit and the velocity limit.
     Acc1Vel,
+    /// No limits.
     #[default]
     None,
 }
 
+/// Whether a profile uses the limits in their nominal (`UP`) or swapped (`DOWN`)
+/// orientation, i.e. whether it moves mainly in positive or negative direction.
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum Direction {
+    /// Nominal limits (`v_max`, `a_max`, ...).
     #[default]
     UP,
+    /// Swapped limits (`v_min`, `a_min`, ...).
     DOWN,
 }
 
+/// The sign pattern of the jerk (or acceleration) in the four non-constant
+/// phases of a profile: `U` = up (positive), `D` = down (negative).
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum ControlSigns {
+    /// Up, down, down, up.
     #[default]
     UDDU,
+    /// Up, down, up, down.
     UDUD,
 }
 
+/// Position extrema of a profile or trajectory and the times they are reached.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Bound {
-    // The extreme position
+    /// The minimum position.
     pub min: f64,
+    /// The maximum position.
     pub max: f64,
-    // Time when the positions are reached
+    /// The time at which the minimum position is reached.
     pub t_min: f64,
+    /// The time at which the maximum position is reached.
     pub t_max: f64,
 }
 
@@ -83,19 +107,21 @@ pub struct Profile {
     /// Jerk value for each phase
     pub j: [f64; 7],
 
-    /// Acceleration at the start/end of each phase
+    /// Acceleration at the start of each phase (`a[7]` is the final acceleration)
     pub a: [f64; 8],
 
-    /// Velocity at the start/end of each phase
+    /// Velocity at the start of each phase (`v[7]` is the final velocity)
     pub v: [f64; 8],
 
-    /// Position at the start/end of each phase
+    /// Position at the start of each phase (`p[7]` is the final position)
     pub p: [f64; 8],
 
-    /// Brake sub-profiles for emergency stops
+    /// Brake pre-trajectory that brings an initial state violating the limits
+    /// back within them before the main profile starts
     pub brake: BrakeProfile,
 
-    /// Acceleration sub-profiles
+    /// Post-trajectory appended after the main profile (currently always of
+    /// zero duration, but included in the total duration)
     pub accel: BrakeProfile,
 
     /// Target final position
@@ -139,10 +165,48 @@ fn jerk_pattern(control_signs: ControlSigns, t: &[f64; 7], jf: f64) -> [f64; 7] 
 }
 
 impl Profile {
+    /// Validates a third-order velocity-control profile whose phase durations `t`
+    /// have been set.
+    ///
+    /// Computes the cumulative times, the jerk pattern for `control_signs` with
+    /// jerk `jf`, and integrates the states. Sets `control_signs`, `limits` and
+    /// `direction`. Returns `true` if all durations are non-negative, the final
+    /// velocity and acceleration match the target and the acceleration limits
+    /// hold.
+    #[inline]
     pub fn check_for_velocity(
         &mut self,
         control_signs: ControlSigns,
         limits: ReachedLimits,
+        jf: f64,
+        a_max: f64,
+        a_min: f64,
+    ) -> bool {
+        self.check_for_velocity_impl(control_signs, limits, false, jf, a_max, a_min)
+    }
+
+    /// [`check_for_velocity`](Self::check_for_velocity) for a profile whose
+    /// first phase ends at the acceleration limit `a_max` by construction:
+    /// the acceleration is snapped exactly to the limit there, so that the
+    /// rounding of the integration cannot exceed it.
+    #[inline]
+    pub fn check_for_velocity_at_acceleration_limit(
+        &mut self,
+        control_signs: ControlSigns,
+        limits: ReachedLimits,
+        jf: f64,
+        a_max: f64,
+        a_min: f64,
+    ) -> bool {
+        self.check_for_velocity_impl(control_signs, limits, true, jf, a_max, a_min)
+    }
+
+    #[inline(always)]
+    fn check_for_velocity_impl(
+        &mut self,
+        control_signs: ControlSigns,
+        limits: ReachedLimits,
+        set_limits: bool,
         jf: f64,
         a_max: f64,
         a_min: f64,
@@ -177,6 +241,10 @@ impl Profile {
             self.p[i + 1] = self.p[i]
                 + self.t[i]
                     * (self.v[i] + self.t[i] * (self.a[i] / 2.0 + self.t[i] * self.j[i] / 6.0));
+
+            if set_limits && i == 0 {
+                self.a[1] = a_max;
+            }
         }
 
         self.control_signs = control_signs;
@@ -207,6 +275,11 @@ impl Profile {
             && self.a[5] <= a_upp_lim
     }
 
+    /// [`check_for_velocity`](Self::check_for_velocity) for a profile with a
+    /// prescribed duration `_tf`.
+    ///
+    /// The duration is not checked separately, since every profile with a
+    /// prescribed duration is constructed from a `tf - ...` equation.
     #[inline]
     pub fn check_for_velocity_with_timing(
         &mut self,
@@ -221,6 +294,8 @@ impl Profile {
         self.check_for_velocity(control_signs, limits, jf, a_max, a_min)
     }
 
+    /// Like [`check_for_velocity_with_timing`](Self::check_for_velocity_with_timing),
+    /// but additionally requires `|jf| <= |j_max|`.
     #[inline]
     pub fn check_for_velocity_with_timing_full(
         &mut self,
@@ -236,6 +311,8 @@ impl Profile {
             && self.check_for_velocity_with_timing(tf, control_signs, limits, jf, a_max, a_min)
     }
 
+    /// Sets the initial state and the target velocity and acceleration for
+    /// velocity control. The target position is left unchanged.
     #[inline]
     pub fn set_boundary_for_velocity(
         &mut self,
@@ -252,7 +329,10 @@ impl Profile {
         self.vf = vf_new;
     }
 
-    // For second-order velocity interface
+    /// Validates a second-order velocity-control profile (infinite jerk) with a
+    /// single constant-acceleration phase `t[1]` of acceleration `a_up`.
+    ///
+    /// Returns `true` if the final velocity matches the target.
     #[inline]
     pub fn check_for_second_order_velocity(
         &mut self,
@@ -294,6 +374,8 @@ impl Profile {
         (self.v[7] - self.vf).abs() < V_PRECISION
     }
 
+    /// [`check_for_second_order_velocity`](Self::check_for_second_order_velocity)
+    /// for a profile with a prescribed duration `_tf`.
     #[inline]
     pub fn check_for_second_order_velocity_with_timing(
         &mut self,
@@ -305,6 +387,8 @@ impl Profile {
         self.check_for_second_order_velocity(control_signs, limits, a_up)
     }
 
+    /// Like [`check_for_second_order_velocity_with_timing`](Self::check_for_second_order_velocity_with_timing),
+    /// but additionally requires `a_min <= a_up <= a_max`.
     #[inline]
     pub fn check_for_second_order_velocity_with_timing_a_limits(
         &mut self,
@@ -320,6 +404,15 @@ impl Profile {
             && self.check_for_second_order_velocity_with_timing(_tf, control_signs, limits, a_up)
     }
 
+    /// Validates a third-order position-control profile whose phase durations
+    /// `t` have been set.
+    ///
+    /// Computes the cumulative times, the jerk pattern for `control_signs` with
+    /// jerk `jf`, and integrates the states. If `set_limits` is `true`, the
+    /// accelerations of phases that reach a limit are snapped exactly to it.
+    /// Sets `control_signs`, `limits` and `direction`. Returns `true` if all
+    /// durations are non-negative and consistent with `limits`, the final state
+    /// matches the target, and the velocity and acceleration limits hold.
     #[inline(always)]
     pub fn check(
         &mut self,
@@ -467,6 +560,11 @@ impl Profile {
             && self.v[6] >= v_low_lim
     }
 
+    /// [`check`](Self::check) (without snapping to limits) for a profile with
+    /// a prescribed duration.
+    ///
+    /// The duration is not checked separately, since every profile with a
+    /// prescribed duration is constructed from a `tf - ...` equation.
     #[inline]
     pub fn check_with_timing(
         &mut self,
@@ -484,6 +582,8 @@ impl Profile {
         self.check(control_signs, limits, false, jf, v_max, v_min, a_max, a_min)
     }
 
+    /// Like [`check_with_timing`](Self::check_with_timing), but additionally
+    /// requires `|jf| <= |j_max|`.
     #[inline]
     pub fn check_with_timing_full(
         &mut self,
@@ -501,6 +601,8 @@ impl Profile {
             && self.check_with_timing(control_signs, limits, jf, v_max, v_min, a_max, a_min)
     }
 
+    /// Copies the initial state, the target state and the brake and
+    /// acceleration sub-profiles from `profile`.
     #[inline]
     pub fn set_boundary_from_profile(&mut self, profile: &Profile) {
         self.a[0] = profile.a[0];
@@ -513,6 +615,8 @@ impl Profile {
         self.accel = profile.accel;
     }
 
+    /// Sets the initial state (`p0_new`, `v0_new`, `a0_new`) and the target
+    /// state (`pf_new`, `vf_new`, `af_new`).
     #[inline]
     pub fn set_boundary(
         &mut self,
@@ -531,6 +635,12 @@ impl Profile {
         self.pf = pf_new;
     }
 
+    /// Validates a second-order position-control profile (infinite jerk) whose
+    /// phase durations `t` have been set, using the accelerations `a_up` and
+    /// `a_down` according to `control_signs`.
+    ///
+    /// Returns `true` if all durations are non-negative, the final position and
+    /// velocity match the target and the velocity limits hold.
     #[inline]
     pub fn check_for_second_order(
         &mut self,
@@ -628,6 +738,11 @@ impl Profile {
             && self.v[7] >= v_low_lim
     }
 
+    /// [`check_for_second_order`](Self::check_for_second_order) for a profile
+    /// with a prescribed duration.
+    ///
+    /// The duration is not checked separately, since every profile with a
+    /// prescribed duration is constructed from a `tf - ...` equation.
     #[inline]
     pub fn check_for_second_order_with_timing(
         &mut self,
@@ -644,6 +759,9 @@ impl Profile {
         // && (f64::abs(self.t_sum.last().unwrap_or(&0.0) - tf) < T_PRECISION)
     }
 
+    /// Like [`check_for_second_order_with_timing`](Self::check_for_second_order_with_timing),
+    /// but additionally requires `a_up` and `a_down` to lie within
+    /// `[a_min, a_max]`.
     #[inline]
     pub fn check_for_second_order_with_timing_full(
         &mut self,
@@ -672,7 +790,10 @@ impl Profile {
             )
     }
 
-    // For first-order position interface
+    /// Validates a first-order position-control profile (infinite acceleration)
+    /// with a single constant-velocity phase `t[3]` of velocity `v_up`.
+    ///
+    /// Returns `true` if the final position matches the target.
     #[inline]
     pub fn check_for_first_order(
         &mut self,
@@ -717,6 +838,8 @@ impl Profile {
         (self.p[7] - self.pf).abs() < P_PRECISION
     }
 
+    /// [`check_for_first_order`](Self::check_for_first_order) for a profile with
+    /// a prescribed duration.
     #[inline]
     pub fn check_for_first_order_with_timing(
         &mut self,
@@ -728,6 +851,8 @@ impl Profile {
         self.check_for_first_order(v_up, control_signs, limits)
     }
 
+    /// Like [`check_for_first_order_with_timing`](Self::check_for_first_order_with_timing),
+    /// but additionally requires `v_min <= v_up <= v_max`.
     #[inline]
     pub fn check_for_first_order_with_timing_full(
         &mut self,
@@ -743,6 +868,10 @@ impl Profile {
             && self.check_for_first_order_with_timing(control_signs, limits, tf, v_up)
     }
 
+    /// Updates `ext` with the position at local time `t_ext` of a constant-jerk
+    /// phase (start state `p`, `v`, `a`, jerk `j`, duration `t`, starting at
+    /// `t_sum`), if `t_ext` lies strictly inside the phase. A positive
+    /// acceleration there indicates a minimum, a negative one a maximum.
     pub fn check_position_extremum(
         t_ext: f64,
         t_sum: f64,
@@ -798,6 +927,8 @@ impl Profile {
         }
     }
 
+    /// Returns the minimum and maximum positions of the profile, including the
+    /// brake pre-trajectory, and the times at which they are reached.
     pub fn get_position_extrema(&self) -> Bound {
         let mut extrema = Bound {
             min: f64::INFINITY,
@@ -857,6 +988,10 @@ impl Profile {
         extrema
     }
 
+    /// Returns the first time at which the profile reaches the position `pt`,
+    /// together with the velocity and acceleration at that time, as
+    /// `(time, velocity, acceleration)`. `offset` is added to the returned time.
+    /// The brake pre-trajectory is not searched.
     pub fn get_first_state_at_position(&self, pt: f64, offset: f64) -> Option<(f64, f64, f64)> {
         for i in 0..7 {
             if (self.p[i] - pt).abs() < f64::EPSILON {

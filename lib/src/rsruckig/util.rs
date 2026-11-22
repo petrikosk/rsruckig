@@ -7,6 +7,8 @@ use core::ops::{Deref, DerefMut, Index, IndexMut};
 
 use crate::alloc::{vec, vec::Vec, format, string::{String, ToString}};
 
+/// Formats numbers as a comma-separated list, with 16 decimal places when
+/// `high_precision` is set (used by the `Display` implementations)
 pub fn join<const DOF: usize>(numbers: &[f64], high_precision: bool) -> String {
     if high_precision {
         numbers
@@ -23,6 +25,10 @@ pub fn join<const DOF: usize>(numbers: &[f64], high_precision: bool) -> String {
     }
 }
 
+/// Integrates a constant-jerk motion over the time `t`.
+///
+/// Starting from position `p0`, velocity `v0` and acceleration `a0` with
+/// constant jerk `j`, returns the resulting `(position, velocity, acceleration)`.
 #[inline]
 pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
     (
@@ -32,7 +38,6 @@ pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
     )
 }
 
-// A utility enum to store either an array or a vector
 /// A container that can store data either on the stack or the heap
 ///
 /// This enum provides a unified interface for working with data stored either:
@@ -51,7 +56,7 @@ pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
 /// # Examples
 ///
 /// Stack allocation (fixed size at compile time):
-/// ```no_run
+/// ```
 /// use rsruckig::prelude::*;
 ///
 /// // Using the daov_stack! macro for stack allocation
@@ -60,11 +65,11 @@ pub fn integrate(t: f64, p0: f64, v0: f64, a0: f64, j: f64) -> (f64, f64, f64) {
 /// ```
 ///
 /// Heap allocation (dynamic size at runtime):
-/// ```no_run
+/// ```
 /// use rsruckig::prelude::*;
 ///
 /// // Using the daov_heap! macro for heap allocation
-/// let data: DataArrayOrVec<f64, 3> = daov_heap![0.0, 1.0, 2.0];
+/// let data: DataArrayOrVec<f64, 0> = daov_heap![0.0, 1.0, 2.0];
 /// assert_eq!(data[1], 1.0);
 /// ```
 #[derive(Debug)]
@@ -103,6 +108,7 @@ impl<T: Default + Clone + core::fmt::Debug, const N: usize> DataArrayOrVec<T, N>
         }
     }
 
+    /// Returns a reference to the element at `index`, or `None` if out of bounds
     #[inline]
     pub fn get(&self, index: usize) -> Option<&T> {
         match self {
@@ -111,6 +117,8 @@ impl<T: Default + Clone + core::fmt::Debug, const N: usize> DataArrayOrVec<T, N>
         }
     }
 
+    /// Returns a mutable reference to the element at `index`, or `None` if out
+    /// of bounds
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         match self {
@@ -231,13 +239,18 @@ impl<T: Clone + Default + core::fmt::Debug, const N: usize> DerefMut for DataArr
     }
 }
 
-/// Helper macro for counting elements in a sequence.
-/// This is used internally by the daov_stack and daov_heap macros.
+/// Counts the comma-separated expressions passed to it at compile time.
+///
+/// ```
+/// use rsruckig::prelude::*;
+///
+/// assert_eq!(count_exprs!(1.0, 2.0, 3.0), 3);
+/// ```
 #[macro_export]
 macro_rules! count_exprs {
     () => (0);
     ($x:expr) => (1);
-    ($x:expr, $($rest:expr),*) => (1 + count_exprs!($($rest),*));
+    ($x:expr, $($rest:expr),*) => (1 + $crate::count_exprs!($($rest),*));
 }
 
 /// Creates a stack-allocated `DataArrayOrVec` instance with fixed-size array storage.
@@ -275,12 +288,12 @@ macro_rules! daov_stack {
     ($($x:expr),+ $(,)?) => {
         {
             let temp = [$($x),*];
-            rsruckig::prelude::DataArrayOrVec::Stack(temp)
+            $crate::util::DataArrayOrVec::Stack(temp)
         }
     };
     ($x:expr; $n:expr) => {
         {
-            rsruckig::prelude::DataArrayOrVec::Stack([$x; $n])
+            $crate::util::DataArrayOrVec::Stack([$x; $n])
         }
     };
 }
@@ -297,7 +310,7 @@ macro_rules! daov_stack {
 /// use rsruckig::prelude::*;
 ///
 /// // Create a heap-allocated vector with 3 elements
-/// let velocities: DataArrayOrVec<f64, 3> = daov_heap![0.0, 1.0, 2.0];
+/// let velocities: DataArrayOrVec<f64, 0> = daov_heap![0.0, 1.0, 2.0];
 ///
 /// // Access elements via indexing
 /// assert_eq!(velocities[0], 0.0);
@@ -311,7 +324,7 @@ macro_rules! daov_stack {
 /// use rsruckig::prelude::*;
 ///
 /// // Create a heap-allocated vector with 5 zeros
-/// let zeros: DataArrayOrVec<f64, 5> = daov_heap![0.0; 5];
+/// let zeros: DataArrayOrVec<f64, 0> = daov_heap![0.0; 5];
 ///
 /// assert_eq!(zeros[0], 0.0);
 /// assert_eq!(zeros[4], 0.0);
@@ -321,12 +334,12 @@ macro_rules! daov_heap {
     ($($x:expr),+ $(,)?) => {
         {
             let temp = [$($x),*];
-            rsruckig::prelude::DataArrayOrVec::Heap(temp.into())
+            $crate::util::DataArrayOrVec::Heap(temp.into())
         }
     };
     ($x:expr; $n:expr) => {
         {
-            rsruckig::prelude::DataArrayOrVec::Heap(vec![$x; $n])
+            $crate::util::DataArrayOrVec::Heap(::core::iter::repeat($x).take($n).collect())
         }
     };
 }

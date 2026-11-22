@@ -101,17 +101,26 @@ pub fn velocity_cap_second_order(d: f64, a_min: f64) -> f64 {
     (2.0 * a_min.abs() * d).sqrt()
 }
 
+/// A pre-trajectory of up to two constant-jerk phases that brings a state which
+/// violates the kinematic limits back within them.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BrakeProfile {
+    /// Overall duration of the brake trajectory.
     pub duration: f64,
+    /// Durations of the two phases.
     pub t: [f64; 2],
+    /// Jerk of each phase.
     pub j: [f64; 2],
+    /// Acceleration at the start of each phase.
     pub a: [f64; 2],
+    /// Velocity at the start of each phase.
     pub v: [f64; 2],
+    /// Position at the start of each phase.
     pub p: [f64; 2],
 }
 
 impl BrakeProfile {
+    /// Creates an empty brake profile (zero duration).
     pub fn new() -> Self {
         BrakeProfile {
             duration: 0.0,
@@ -184,6 +193,10 @@ impl BrakeProfile {
         }
     }
 
+    /// Calculates the brake trajectory for third-order position control, if the
+    /// initial velocity `v0` or acceleration `a0` exceeds the given limits (or
+    /// would inevitably exceed the velocity limits). Only the phase durations `t`
+    /// and jerks `j` are set; call [`finalize`](Self::finalize) afterwards.
     pub fn get_position_brake_trajectory(
         &mut self,
         v0: f64,
@@ -271,6 +284,10 @@ impl BrakeProfile {
         );
     }
 
+    /// Calculates the brake trajectory for second-order position control
+    /// (infinite jerk), if `v0` lies outside `[v_min, v_max]`. Sets the phase
+    /// duration `t[0]` and its constant acceleration `a[0]`; call
+    /// [`finalize_second_order`](Self::finalize_second_order) afterwards.
     pub fn get_second_order_position_brake_trajectory(
         &mut self,
         v0: f64,
@@ -299,6 +316,8 @@ impl BrakeProfile {
         }
     }
 
+    /// Calculates the brake trajectory for third-order velocity control, if the
+    /// initial acceleration `a0` lies outside `[a_min, a_max]`.
     pub fn get_velocity_brake_trajectory(&mut self, a0: f64, a_max: f64, a_min: f64, j_max: f64) {
         self.t[0] = 0.0;
         self.t[1] = 0.0;
@@ -318,6 +337,8 @@ impl BrakeProfile {
         }
     }
 
+    /// Resets the brake trajectory for second-order velocity control, which
+    /// never needs braking.
     pub fn get_second_order_velocity_brake_trajectory(&mut self) {
         self.t[0] = 0.0;
         self.t[1] = 0.0;
@@ -325,6 +346,9 @@ impl BrakeProfile {
         self.j[1] = 0.0;
     }
 
+    /// Integrates the brake phases starting from the state (`ps`, `vs`, `as_`),
+    /// stores the per-phase start states and the total duration, and updates the
+    /// state in place to the state at the end of braking.
     pub fn finalize(&mut self, ps: &mut f64, vs: &mut f64, as_: &mut f64) {
         if self.t[0] <= 0.0 && self.t[1] <= 0.0 {
             self.duration = 0.0;
@@ -352,6 +376,8 @@ impl BrakeProfile {
         }
     }
 
+    /// Second-order counterpart of [`finalize`](Self::finalize): integrates the
+    /// single constant-acceleration phase and updates the state in place.
     pub fn finalize_second_order(&mut self, ps: &mut f64, vs: &mut f64, as_: &mut f64) {
         if self.t[0] <= 0.0 {
             self.duration = 0.0;

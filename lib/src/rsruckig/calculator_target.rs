@@ -118,6 +118,12 @@ impl DurationBudget {
     }
 }
 
+/// Calculator for state-to-state trajectories without intermediate waypoints.
+///
+/// For every DoF it first calculates the time-optimal profile and the blocked
+/// duration intervals (step 1), then determines the synchronized duration and
+/// recalculates the profiles of the remaining DoFs for it (step 2). Used by
+/// [`Ruckig`](crate::ruckig::Ruckig) and [`Trackig`](crate::trackig::Trackig).
 #[derive(Debug, Clone)]
 pub struct TargetCalculator<const DOF: usize> {
     eps: f64,
@@ -144,10 +150,13 @@ pub struct TargetCalculator<const DOF: usize> {
     position_limits_active: bool,
     inp_per_dof_control_interface: DataArrayOrVec<ControlInterface, DOF>,
     inp_per_dof_synchronization: DataArrayOrVec<Synchronization, DOF>,
+    /// Number of degrees of freedom
     pub degrees_of_freedom: usize,
 }
 
 impl<const DOF: usize> TargetCalculator<DOF> {
+    /// Create a calculator. Pass `None` to use the compile-time `DOF`, or
+    /// `Some(n)` with `DOF = 0` for `n` heap-allocated degrees of freedom.
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
             blocks: DataArrayOrVec::new(dofs, Block::default()),

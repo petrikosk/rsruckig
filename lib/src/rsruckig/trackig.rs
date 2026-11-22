@@ -57,12 +57,19 @@ use std::time::Instant;
 /// Kinematic target state of a tracked signal (per DoF)
 #[derive(Debug, Clone, Default)]
 pub struct TargetState<const DOF: usize> {
+    /// Target position of each DoF
     pub position: DataArrayOrVec<f64, DOF>,
+    /// Target velocity of each DoF
     pub velocity: DataArrayOrVec<f64, DOF>,
+    /// Target acceleration of each DoF
     pub acceleration: DataArrayOrVec<f64, DOF>,
 }
 
 impl<const DOF: usize> TargetState<DOF> {
+    /// Create a target state with all values set to zero.
+    ///
+    /// `dofs` is the number of degrees of freedom for heap allocation
+    /// (`DOF == 0`) and is ignored for stack allocation (`DOF > 0`).
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
             position: DataArrayOrVec::new(dofs, 0.0),
@@ -98,8 +105,11 @@ fn assign_optional<T, const DOF: usize>(
 /// of returning an error.
 #[derive(Debug)]
 pub struct Trackig<const DOF: usize, E: RuckigErrorHandler> {
+    /// Calculator for the state-to-state trajectory of each cycle
     pub calculator: TargetCalculator<DOF>,
+    /// Number of degrees of freedom
     pub degrees_of_freedom: usize,
+    /// Control cycle duration in seconds
     pub delta_time: f64,
     /// Optional first-order low-pass filter time constant (in seconds) applied
     /// to the raw target signal. `None` (default) disables filtering.
@@ -114,6 +124,11 @@ pub struct Trackig<const DOF: usize, E: RuckigErrorHandler> {
 }
 
 impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
+    /// Create a new tracking instance with the control cycle `delta_time`
+    /// (in seconds).
+    ///
+    /// `dofs` is the number of degrees of freedom for heap allocation
+    /// (`DOF == 0`) and is ignored for stack allocation (`DOF > 0`).
     pub fn new(dofs: Option<usize>, delta_time: f64) -> Self {
         Self {
             calculator: TargetCalculator::new(dofs),

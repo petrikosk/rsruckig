@@ -190,10 +190,13 @@ pub struct WaypointsCalculator<const DOF: usize> {
     /// by a full state-to-state calculation. `0` disables refinement (fastest
     /// calculation, most conservative trajectory).
     pub refinement_sweeps: usize,
+    /// Number of degrees of freedom
     pub degrees_of_freedom: usize,
 }
 
 impl<const DOF: usize> WaypointsCalculator<DOF> {
+    /// Create a calculator. Pass `None` to use the compile-time `DOF`, or
+    /// `Some(n)` with `DOF = 0` for `n` heap-allocated degrees of freedom.
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
             solvers: [SectionSolver::new(dofs), SectionSolver::new(dofs)],

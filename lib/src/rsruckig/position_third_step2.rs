@@ -9,6 +9,8 @@ use crate::{
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
+/// Step 2 solver for the third-order position interface: calculates a profile
+/// with the synchronized duration `tf`.
 pub struct PositionThirdOrderStep2 {
     v0: f64,
     a0: f64,
@@ -48,6 +50,9 @@ pub struct PositionThirdOrderStep2 {
 }
 
 impl PositionThirdOrderStep2 {
+    /// Create a solver for moving from state `(p0, v0, a0)` to `(pf, vf, af)`
+    /// in duration `tf` within the velocity limits `[v_min, v_max]`,
+    /// acceleration limits `[a_min, a_max]` and maximal jerk `j_max`.
     pub fn new(
         tf: f64,
         p0: f64,
@@ -2446,6 +2451,12 @@ impl PositionThirdOrderStep2 {
         false
     }
 
+    /// Calculate a profile that reaches the target in exactly the duration
+    /// `tf` given to [`Self::new`].
+    ///
+    /// The phase durations are written into `profile`, whose boundary state
+    /// and pre-trajectories must already be set. Returns `false` if no valid
+    /// profile with that duration exists within the limits.
     pub fn get_profile(&mut self, profile: &mut Profile) -> bool {
         // Test all cases to get ones that match
         // However we should guess which one is correct and try them first...

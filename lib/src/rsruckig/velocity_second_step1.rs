@@ -5,6 +5,8 @@ use crate::{
     profile::{ControlSigns, Profile, ReachedLimits},
 };
 
+/// Step 1 solver for the second-order velocity interface: calculates the
+/// time-optimal profile, accelerating at the limit towards the target velocity.
 #[derive(Debug)]
 pub struct VelocitySecondOrderStep1 {
     _a_max: f64,
@@ -13,6 +15,8 @@ pub struct VelocitySecondOrderStep1 {
 }
 
 impl VelocitySecondOrderStep1 {
+    /// Create a solver for changing the velocity from `v0` to `vf` within the
+    /// acceleration limits `[a_min, a_max]`.
     pub fn new(v0: f64, vf: f64, a_max: f64, a_min: f64) -> Self {
         Self {
             _a_max: a_max,
@@ -20,6 +24,12 @@ impl VelocitySecondOrderStep1 {
             vd: vf - v0,
         }
     }
+    /// Calculate the time-optimal profile for this DoF.
+    ///
+    /// Writes the minimal-duration profile into `block.p_min` (with the brake
+    /// and acceleration pre-trajectories and boundary state taken from
+    /// `input`) and sets `block.t_min`. Returns `false` if no valid profile was
+    /// found.
     pub fn get_profile(&mut self, input: &Profile, block: &mut Block) -> bool {
         let p = &mut block.p_min;
         p.set_boundary_from_profile(input);

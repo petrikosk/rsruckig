@@ -262,3 +262,142 @@ fn test_at_times_matches_at_time() {
     assert_eq!(states[24].section, 2, "past the end");
     assert_eq!(traj.state_at(duration).position, states[20].position);
 }
+
+/// The velocity (position interface only), acceleration and jerk of DoF 0
+/// stay within their limits for the whole duration
+fn assert_within_limits(input: &InputParameter<1>, traj: &Trajectory<1>) {
+    const STEPS: usize = 4096;
+    let duration = traj.get_duration();
+    for step in 0..=STEPS {
+        let state = traj.state_at(duration * step as f64 / STEPS as f64);
+        let (t, v, a, j) = (state.time, state.velocity[0], state.acceleration[0], state.jerk[0]);
+        if input.control_interface == ControlInterface::Position {
+            assert!(v.abs() <= input.max_velocity[0] + 1e-9, "velocity {v} at t = {t}");
+        }
+        assert!(a.abs() <= input.max_acceleration[0] + 1e-9, "acceleration {a} at t = {t}");
+        assert!(j.abs() <= input.max_jerk[0] * (1.0 + 1e-12), "jerk {j} at t = {t}");
+    }
+}
+
+/// A quartic with roots far below one has coefficients below the machine
+/// epsilon that are not negligible: x^4 + b x^2 + c x + d with a root at 5e-5
+#[test]
+fn test_solve_quart_with_small_roots() {
+    let polynom = [0.0, 4.235308885508857e-8, 1.63463932024377e-16, -1.1211150847294935e-16];
+    let value = |x: f64| ((x * x + polynom[1]) * x + polynom[2]) * x + polynom[3];
+
+    let roots = roots::solve_quart_monic_scaled(&polynom);
+    let positive: Vec<f64> = roots.get_data().iter().copied().filter(|&x| x > 0.0).collect();
+    assert_eq!(positive.len(), 1, "roots: {positive:?}");
+    assert_float_eq!(positive[0], 5.0e-5, abs <= 1e-6);
+    assert!(value(positive[0]).abs() < 1e-28, "residual {}", value(positive[0]));
+
+    // Roots of order one are not rescaled: x (x - 1) (x - 2) (x - 3)
+    let polynom = [-6.0, 11.0, -6.0, 0.0];
+    let mut scaled: Vec<f64> = roots::solve_quart_monic_scaled(&polynom).get_data().to_vec();
+    let mut plain: Vec<f64> = roots::solve_quart_monic_arr(&polynom).get_data().to_vec();
+    scaled.sort_by(f64::total_cmp);
+    plain.sort_by(f64::total_cmp);
+    assert_eq!(scaled, plain);
+}
+
+/// Re-planning from a state close to the final jerk phase of a running
+/// profile with high limits: the remaining profile takes 4.4 ms, so that the
+/// coefficients of the quartic for its durations fall below the machine
+/// epsilon and its root was dropped (step 1 failed, as in upstream Ruckig)
+#[test]
+fn test_position_retarget_in_final_jerk_phase() {
+    let mut input = InputParameter::<1>::new(None);
+    input.current_position = daov_stack![0.1976052267223661];
+    input.current_velocity = daov_stack![0.1886795880329236];
+    input.current_acceleration = daov_stack![-86.8257617504501127];
+    input.target_position = daov_stack![0.1978788770940445];
+    input.max_velocity = daov_stack![0.4089533144682651];
+    input.max_acceleration = daov_stack![1000.0];
+    input.max_jerk = daov_stack![20000.0];
+
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.0005);
+    let mut traj = Trajectory::new(None);
+    assert_eq!(otg.calculate(&input, &mut traj).unwrap(), RuckigResult::Working);
+
+    let duration = traj.get_duration();
+    assert_float_eq!(duration, 0.004441275675214965, abs <= 1e-12);
+
+    let start = traj.state_at(0.0);
+    assert_float_eq!(start.position[0], input.current_position[0], abs <= 1e-12);
+    assert_float_eq!(start.velocity[0], input.current_velocity[0], abs <= 1e-12);
+    assert_float_eq!(start.acceleration[0], input.current_acceleration[0], abs <= 1e-9);
+
+    let end = traj.state_at(duration);
+    assert_float_eq!(end.position[0], input.target_position[0], abs <= 1e-9);
+    assert_float_eq!(end.velocity[0], 0.0, abs <= 1e-9);
+    assert_float_eq!(end.acceleration[0], 0.0, abs <= 1e-9);
+
+    assert_within_limits(&input, &traj);
+}
+
+/// Velocity interface starting exactly at the acceleration limit, with a
+/// velocity difference for which the acceleration just touches the opposite
+/// limit: the peak of the profile without an acceleration plateau exceeded
+/// the limit by rounding, while the plateau was too short to count (step 1
+/// failed, as in upstream Ruckig)
+#[test]
+fn test_velocity_at_acceleration_limit() {
+    let mut input = InputParameter::<1>::new(None);
+    input.control_interface = ControlInterface::Velocity;
+    input.current_velocity = daov_stack![45.0000000000000639];
+    input.current_acceleration = daov_stack![3000.0];
+    input.max_velocity = daov_stack![200.0];
+    input.max_acceleration = daov_stack![3000.0];
+    input.max_jerk = daov_stack![100000.0];
+
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.001);
+    let mut traj = Trajectory::new(None);
+    assert_eq!(otg.calculate(&input, &mut traj).unwrap(), RuckigResult::Working);
+
+    // From 3000 to -3000 and back to zero with the maximal jerk
+    let duration = traj.get_duration();
+    assert_float_eq!(duration, 0.09, abs <= 1e-12);
+
+    let start = traj.state_at(0.0);
+    assert_float_eq!(start.velocity[0], input.current_velocity[0], abs <= 1e-12);
+    assert_float_eq!(start.acceleration[0], input.current_acceleration[0], abs <= 1e-9);
+
+    let end = traj.state_at(duration);
+    assert_float_eq!(end.velocity[0], 0.0, abs <= 1e-9);
+    assert_float_eq!(end.acceleration[0], 0.0, abs <= 1e-9);
+
+    assert_within_limits(&input, &traj);
+}
+
+/// Velocity interface with asymmetric acceleration limits of some thousands:
+/// integrating the first phase missed the opposite limit by more than the
+/// absolute tolerance (step 1 failed, as in upstream Ruckig)
+#[test]
+fn test_velocity_at_asymmetric_acceleration_limit() {
+    let mut input = InputParameter::<1>::new(None);
+    input.control_interface = ControlInterface::Velocity;
+    input.current_velocity = daov_stack![820.8709466237777406];
+    input.current_acceleration = daov_stack![2669.4558889757258839];
+    input.target_velocity = daov_stack![-0.4575900641514823];
+    input.max_acceleration = daov_stack![2669.4558889757258839];
+    input.min_acceleration = Some(daov_stack![-4575.9864112724844745]);
+    input.max_jerk = daov_stack![21156.7643019730021479];
+
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.001);
+    let mut traj = Trajectory::new(None);
+    assert_eq!(otg.calculate(&input, &mut traj).unwrap(), RuckigResult::Working);
+
+    let duration = traj.get_duration();
+    let end = traj.state_at(duration);
+    assert_float_eq!(end.velocity[0], input.target_velocity[0], abs <= 1e-9);
+    assert_float_eq!(end.acceleration[0], 0.0, abs <= 1e-9);
+
+    const STEPS: usize = 4096;
+    for step in 0..=STEPS {
+        let state = traj.state_at(duration * step as f64 / STEPS as f64);
+        let (a, j) = (state.acceleration[0], state.jerk[0]);
+        assert!((-4575.9864112724844745 - 1e-9..=2669.4558889757258839 + 1e-9).contains(&a), "acceleration {a}");
+        assert!(j.abs() <= input.max_jerk[0] * (1.0 + 1e-12), "jerk {j}");
+    }
+}

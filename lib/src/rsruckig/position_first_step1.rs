@@ -2,6 +2,9 @@
 use crate::block::Block;
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+/// Step 1 solver for the first-order position interface: calculates the
+/// time-optimal profile, moving at the velocity limit in the direction of the
+/// target.
 #[derive(Debug)]
 pub struct PositionFirstOrderStep1 {
     _v_max: f64,
@@ -10,6 +13,8 @@ pub struct PositionFirstOrderStep1 {
 }
 
 impl PositionFirstOrderStep1 {
+    /// Create a solver for moving from position `p0` to `pf` within the
+    /// velocity limits `[v_min, v_max]`.
     pub fn new(p0: f64, pf: f64, v_max: f64, v_min: f64) -> Self {
         Self {
             _v_max: v_max,
@@ -17,6 +22,12 @@ impl PositionFirstOrderStep1 {
             pd: pf - p0,
         }
     }
+    /// Calculate the time-optimal profile for this DoF.
+    ///
+    /// Writes the minimal-duration profile into `block.p_min` (with the brake
+    /// and acceleration pre-trajectories and boundary state taken from
+    /// `input`) and sets `block.t_min`. Returns `false` if no valid profile was
+    /// found.
     pub fn get_profile(&mut self, input: &Profile, block: &mut Block) -> bool {
         let p = &mut block.p_min;
         p.set_boundary_from_profile(input);

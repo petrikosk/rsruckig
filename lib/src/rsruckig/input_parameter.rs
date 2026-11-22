@@ -213,7 +213,11 @@ pub struct InputParameter<const DOF: usize> {
     pub per_dof_synchronization: Option<DataArrayOrVec<Synchronization, DOF>>,
     /// Optional minimum duration of the trajectory
     pub minimum_duration: Option<f64>,
-    /// Optional duration after which calculation should be interrupted (for real-time guarantees)
+    /// Optional duration after which calculation should be interrupted (for real-time guarantees).
+    ///
+    /// Kept for API compatibility with upstream Ruckig; it is currently not
+    /// evaluated by the calculation, see
+    /// [`OutputParameter::was_calculation_interrupted`](crate::output_parameter::OutputParameter::was_calculation_interrupted).
     pub interrupt_calculation_duration: Option<f64>,
 }
 
@@ -384,6 +388,15 @@ impl<const DOF: usize> Default for InputParameter<DOF> {
 }
 
 impl<const DOF: usize> InputParameter<DOF> {
+    /// Create new input parameters with default settings.
+    ///
+    /// `dofs` is the number of degrees of freedom for heap allocation
+    /// (`DOF == 0`) and is ignored for stack allocation (`DOF > 0`).
+    ///
+    /// All states start at zero, `max_velocity` is `0.0` and has to be set,
+    /// `max_acceleration` and `max_jerk` default to infinity (i.e. the
+    /// trajectory is unconstrained in that order), and position control with
+    /// time synchronization and continuous duration is used.
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
             degrees_of_freedom: dofs.unwrap_or(DOF),
@@ -429,6 +442,8 @@ impl<const DOF: usize> InputParameter<DOF> {
         input
     }
 
+    /// The velocity reached when the acceleration `a0` is brought to zero with
+    /// the constant jerk `j`, starting from velocity `v0`
     #[inline]
     pub fn v_at_a_zero(v0: f64, a0: f64, j: f64) -> f64 {
         v0 + (a0 * a0) / (2.0 * j)

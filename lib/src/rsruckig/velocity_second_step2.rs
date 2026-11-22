@@ -2,6 +2,8 @@
 
 use crate::profile::{ControlSigns, Profile, ReachedLimits};
 
+/// Step 2 solver for the second-order velocity interface: calculates a
+/// constant-acceleration profile with the synchronized duration `tf`.
 #[derive(Debug)]
 pub struct VelocitySecondOrderStep2 {
     tf: f64,
@@ -11,6 +13,8 @@ pub struct VelocitySecondOrderStep2 {
 }
 
 impl VelocitySecondOrderStep2 {
+    /// Create a solver for changing the velocity from `v0` to `vf` in duration
+    /// `tf` within the acceleration limits `[a_min, a_max]`.
     pub fn new(tf: f64, v0: f64, vf: f64, a_max: f64, a_min: f64) -> Self {
         Self {
             tf,
@@ -20,6 +24,12 @@ impl VelocitySecondOrderStep2 {
         }
     }
 
+    /// Calculate a profile that reaches the target in exactly the duration
+    /// `tf` given to [`Self::new`].
+    ///
+    /// The phase durations are written into `profile`, whose boundary state
+    /// and pre-trajectories must already be set. Returns `false` if no valid
+    /// profile with that duration exists within the limits.
     pub fn get_profile(&mut self, profile: &mut Profile) -> bool {
         let af = self.vd / self.tf;
         profile.t[0] = 0.0;

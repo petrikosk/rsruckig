@@ -654,6 +654,205 @@ fn random_position_1_first_time_at_position() {
     );
 }
 
+/// Limits of machine-tool axes: short moves with high acceleration and jerk
+/// limits, whose phases last milliseconds
+fn machine_limit_dists() -> [Uniform<f64>; 3] {
+    [Uniform::new(0.05, 2.0), Uniform::new(10.0, 5000.0), Uniform::new(1000.0, 200_000.0)]
+}
+
+/// The velocity (position interface only), acceleration and jerk of DoF 0
+/// stay within their limits for the whole duration
+fn check_limits_1(input: &InputParameter<1>, traj: &Trajectory<1>) {
+    let min_velocity = input.min_velocity.as_ref().map_or(-input.max_velocity[0], |v| v[0]);
+    let min_acceleration =
+        input.min_acceleration.as_ref().map_or(-input.max_acceleration[0], |a| a[0]);
+    let check_velocity = input.control_interface == ControlInterface::Position;
+
+    const STEPS: usize = 256;
+    let duration = traj.get_duration();
+    for step in 0..=STEPS {
+        let state = traj.state_at(duration * step as f64 / STEPS as f64);
+        let (v, a, j) = (state.velocity[0], state.acceleration[0], state.jerk[0]);
+        assert!(
+            !check_velocity || (min_velocity - 1e-9 <= v && v <= input.max_velocity[0] + 1e-9),
+            "velocity {v} at t = {} exceeds its limits, input: {input}",
+            state.time
+        );
+        assert!(
+            min_acceleration - 1e-9 <= a && a <= input.max_acceleration[0] + 1e-9,
+            "acceleration {a} at t = {} exceeds its limits, input: {input}",
+            state.time
+        );
+        assert!(
+            j.abs() <= input.max_jerk[0] * (1.0 + 1e-12),
+            "jerk {j} at t = {} exceeds its limit, input: {input}",
+            state.time
+        );
+    }
+}
+
+/// A relative perturbation: none, or of a magnitude between 1e-12 and 1e-6
+/// with a random sign
+fn perturbation(rng: &mut Pcg64Mcg) -> f64 {
+    let uniform = Uniform::new(0.0, 1.0);
+    if uniform.sample(rng) < 0.25 {
+        return 0.0;
+    }
+    let magnitude = 10f64.powf(-12.0 + 6.0 * uniform.sample(rng));
+    if uniform.sample(rng) < 0.5 { magnitude } else { -magnitude }
+}
+
+/// Re-planning to the same target from a state on the final jerk phase of a
+/// running profile, exactly or with a small perturbation of the state or the
+/// target. The remaining profile is short there, which is numerically
+/// demanding for the root finding of step 1, in particular with the limits
+/// of a machine tool.
+#[test]
+fn random_position_1_retarget_in_final_jerk_phase() {
+    let mut p = Randomizer::new(Normal::new(0.0, 0.5).unwrap(), 70);
+    let mut d = Randomizer::new(dynamic_dist(), 71);
+    let mut l = Randomizer::new(limit_dist(), 72);
+    let [v_dist, a_dist, j_dist] = machine_limit_dists();
+    let mut rng = Pcg64Mcg::new(73);
+    let uniform = Uniform::new(0.0, 1.0);
+
+    let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, DELTA_TIME);
+    let mut traj = Trajectory::new(None);
+    let mut input = InputParameter::new(None);
+    let mut replanned = Trajectory::new(None);
+
+    let count = number_of_trajectories(2.0);
+    let mut checked = 0;
+    for case in 0..64 * count {
+        if checked == count {
+            break;
+        }
+
+        p.fill(&mut input.current_position);
+        p.fill(&mut input.target_position);
+        if case % 2 == 0 {
+            // Machine tool limits, starting at rest in most cases
+            d.fill_or_zero(&mut input.current_velocity, 0.2);
+            d.fill_or_zero(&mut input.current_acceleration, 0.2);
+            input.max_velocity[0] = v_dist.sample(&mut rng) + input.current_velocity[0].abs();
+            input.max_acceleration[0] = a_dist.sample(&mut rng);
+            input.max_jerk[0] = j_dist.sample(&mut rng);
+        } else {
+            d.fill_or_zero(&mut input.current_velocity, 0.9);
+            d.fill_or_zero(&mut input.current_acceleration, 0.8);
+            l.fill_above(&mut input.max_velocity, &input.current_velocity);
+            l.fill_above(&mut input.max_acceleration, &input.current_acceleration);
+            l.fill(&mut input.max_jerk);
+        }
+        if !check_calculation(&mut otg, &input, &mut traj) {
+            continue;
+        }
+
+        // The last phase with a jerk
+        let profile = &traj.get_profiles()[0][0];
+        let Some(phase) = (0..7).rev().find(|&i| profile.t[i] > 0.0 && profile.j[i] != 0.0) else {
+            continue;
+        };
+        let phase_end = profile.brake.duration + profile.accel.duration + profile.t_sum[phase];
+        let phase_start = phase_end - profile.t[phase];
+
+        for _ in 0..4 {
+            // Anywhere within the phase, or at one of the cycles before its end
+            let time = if uniform.sample(&mut rng) < 0.5 {
+                phase_start + uniform.sample(&mut rng) * profile.t[phase]
+            } else {
+                let cycles = (profile.t[phase] / 0.0005).floor();
+                phase_end - 0.0005 * (uniform.sample(&mut rng) * cycles).ceil()
+            };
+            let state = traj.state_at(time.clamp(phase_start, phase_end));
+
+            let mut retarget = input.clone();
+            retarget.current_position[0] = state.position[0];
+            retarget.current_velocity[0] = state.velocity[0];
+            retarget.current_acceleration[0] = state.acceleration[0];
+
+            let factor = 1.0 + perturbation(&mut rng);
+            match (uniform.sample(&mut rng) * 4.0) as usize {
+                0 => retarget.current_position[0] *= factor,
+                1 => retarget.current_velocity[0] *= factor,
+                2 => retarget.current_acceleration[0] *= factor,
+                _ => retarget.target_position[0] *= factor,
+            }
+
+            if check_calculation(&mut otg, &retarget, &mut replanned) {
+                check_limits_1(&retarget, &replanned);
+            }
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, count, "too few valid random inputs");
+}
+
+/// Velocity interface starting exactly at an acceleration limit or just
+/// inside of it, also for asymmetric limits: the boundary between the
+/// profiles with and without an acceleration plateau.
+#[test]
+fn random_velocity_1_at_acceleration_limit() {
+    let mut d = Randomizer::new(dynamic_dist(), 74);
+    let mut l = Randomizer::new(limit_dist(), 75);
+    let [_, a_dist, j_dist] = machine_limit_dists();
+    let mut rng = Pcg64Mcg::new(76);
+    let uniform = Uniform::new(0.0, 1.0);
+    let velocity_scale = Uniform::new(-1.5, 1.5);
+    let mut case = 0_usize;
+
+    run_random::<1>(
+        number_of_trajectories(4.0),
+        |input| {
+            case += 1;
+            input.control_interface = ControlInterface::Velocity;
+            d.fill_or_zero(&mut input.target_velocity, 0.5);
+            d.fill_or_zero(&mut input.target_acceleration, 0.3);
+            if case.is_multiple_of(2) {
+                input.max_acceleration[0] = a_dist.sample(&mut rng) + input.target_acceleration[0].abs();
+                input.max_jerk[0] = j_dist.sample(&mut rng);
+            } else {
+                l.fill_above(&mut input.max_acceleration, &input.target_acceleration);
+                l.fill(&mut input.max_jerk);
+            }
+            let (a_max, j_max) = (input.max_acceleration[0], input.max_jerk[0]);
+
+            let a_min = if uniform.sample(&mut rng) < 0.5 {
+                let a_min = -(0.1 + 1.9 * uniform.sample(&mut rng)) * a_max
+                    - input.target_acceleration[0].abs();
+                input.min_acceleration = Some(daov_stack![a_min]);
+                a_min
+            } else {
+                input.min_acceleration = None;
+                -a_max
+            };
+
+            // Exactly at a limit, the adjacent double or slightly inside
+            let limit = if uniform.sample(&mut rng) < 0.5 { a_max } else { a_min };
+            input.current_acceleration[0] = match (uniform.sample(&mut rng) * 3.0) as usize {
+                0 => limit,
+                1 => f64::from_bits(limit.to_bits() - 1),
+                _ => limit * (1.0 - perturbation(&mut rng).abs()),
+            };
+
+            // A random velocity difference, or the one of the profile that
+            // just touches the opposite acceleration limit, where the
+            // acceleration plateau vanishes
+            let other = if limit == a_max { a_min } else { a_max };
+            let af = input.target_acceleration[0];
+            let ramp = (a_max - a_min).powi(2) / (2.0 * j_max);
+            let difference = match (uniform.sample(&mut rng) * 3.0) as usize {
+                0 => velocity_scale.sample(&mut rng) * ramp,
+                1 => limit.signum() * (limit * limit - af * af) / (2.0 * j_max),
+                _ => limit.signum() * (limit * limit - 2.0 * other * other + af * af) / (2.0 * j_max),
+            };
+            input.current_velocity[0] =
+                input.target_velocity[0] - difference * (1.0 + perturbation(&mut rng));
+        },
+        |_, input, traj| check_limits_1(input, traj),
+    );
+}
+
 /// Stepping through a trajectory with `update` reaches the target, and
 /// re-planning from the intermediate states succeeds (cf. upstream
 /// `step_through_and_check_calculation`).

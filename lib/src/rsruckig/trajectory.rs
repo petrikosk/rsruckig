@@ -17,9 +17,13 @@ use crate::alloc::{vec, vec::Vec};
 pub struct KinematicState<const DOF: usize> {
     /// The sampled time
     pub time: f64,
+    /// Position of each DoF
     pub position: DataArrayOrVec<f64, DOF>,
+    /// Velocity of each DoF
     pub velocity: DataArrayOrVec<f64, DOF>,
+    /// Acceleration of each DoF
     pub acceleration: DataArrayOrVec<f64, DOF>,
+    /// Jerk of each DoF
     pub jerk: DataArrayOrVec<f64, DOF>,
     /// Index of the section the time lies in; the number of sections for
     /// times past the end of the trajectory
@@ -31,9 +35,12 @@ pub struct KinematicState<const DOF: usize> {
 pub struct Trajectory<const DOF: usize> {
     /// Profiles per section (one entry per section between waypoints) and DoF
     pub profiles: Vec<DataArrayOrVec<Profile, DOF>>,
+    /// Total duration of the trajectory in seconds
     pub duration: f64,
     /// Absolute end time of each section; the last entry equals `duration`
     pub cumulative_times: Vec<f64>,
+    /// Minimum duration each DoF would need on its own, without
+    /// synchronization to the other DoFs
     pub independent_min_durations: DataArrayOrVec<f64, DOF>,
     position_extrema: DataArrayOrVec<Bound, DOF>,
     degrees_of_freedom: usize,
@@ -53,6 +60,10 @@ impl<const DOF: usize> Default for Trajectory<DOF> {
 }
 
 impl<const DOF: usize> Trajectory<DOF> {
+    /// Create an empty trajectory with a single section.
+    ///
+    /// `dofs` is the number of degrees of freedom for heap allocation
+    /// (`DOF == 0`) and is ignored for stack allocation (`DOF > 0`).
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
             profiles: vec![DataArrayOrVec::<Profile, DOF>::new(
@@ -102,6 +113,15 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
     }
 
+    /// Locate the phase that contains `time` and call `set_integrate` once per
+    /// DoF with the starting state of that phase.
+    ///
+    /// The callback receives `(dof, t, p, v, a, j)`: the time `t` elapsed
+    /// since the start of the phase and the phase's initial position,
+    /// velocity, acceleration and constant jerk, ready to be passed to
+    /// [`integrate`]. Times past the end extrapolate the final state with
+    /// zero jerk. `new_section` is set to the index of the section containing
+    /// `time` (the number of sections for times past the end).
     #[inline]
     pub fn state_to_integrate_from<F>(
         &self,
@@ -182,6 +202,14 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
     }
 
+    /// Sample the kinematic state at `time` into existing storage.
+    ///
+    /// Each output that is `Some` is overwritten with the corresponding
+    /// value per DoF; `None` outputs are skipped. `new_section` receives the
+    /// section index (see [`state_to_integrate_from`](Trajectory::state_to_integrate_from)).
+    /// This method does not allocate, which makes it suitable for control
+    /// loops; [`state_at`](Trajectory::state_at) is the more convenient
+    /// by-value alternative.
     #[inline]
     pub fn at_time(
         &self,
@@ -312,11 +340,13 @@ impl<const DOF: usize> Trajectory<DOF> {
         self.position_extrema.copy_from(&other.position_extrema);
     }
 
+    /// The profiles of all sections, indexed as `[section][dof]`
     #[inline]
     pub fn get_profiles(&self) -> &Vec<DataArrayOrVec<Profile, { DOF }>> {
         &self.profiles
     }
 
+    /// Total duration of the trajectory in seconds
     #[inline]
     pub fn get_duration(&self) -> f64 {
         self.duration
@@ -329,11 +359,18 @@ impl<const DOF: usize> Trajectory<DOF> {
         &self.cumulative_times
     }
 
+    /// Minimum duration each DoF would need on its own, without
+    /// synchronization to the other DoFs
     #[inline]
     pub fn get_independent_min_durations(&self) -> &DataArrayOrVec<f64, { DOF }> {
         &self.independent_min_durations
     }
 
+    /// Position extrema of each DoF over the whole trajectory, together with
+    /// the (absolute) times at which they are reached.
+    ///
+    /// The extrema are computed on each call and cached in the trajectory,
+    /// hence the `&mut self`.
     pub fn get_position_extrema(&mut self) -> &DataArrayOrVec<Bound, { DOF }> {
         for dof in 0..self.degrees_of_freedom {
             self.position_extrema[dof] = self.profiles[0][dof].get_position_extrema();
@@ -358,6 +395,8 @@ impl<const DOF: usize> Trajectory<DOF> {
         &self.position_extrema
     }
 
+    /// The first (absolute) time at which `dof` passes through `position`,
+    /// or `None` if the position is never reached or `dof` is out of range
     pub fn get_first_time_at_position(&self, dof: usize, position: f64) -> Option<f64> {
         if dof >= self.degrees_of_freedom {
             return None;

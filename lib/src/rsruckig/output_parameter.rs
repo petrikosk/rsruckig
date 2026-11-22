@@ -54,9 +54,13 @@ pub struct OutputParameter<const DOF: usize> {
     pub did_section_change: bool,
     /// Whether a new trajectory was calculated in the last update
     pub new_calculation: bool,
-    /// Whether the trajectory calculation was interrupted (time limit reached)
+    /// Whether the trajectory calculation was interrupted (time limit reached).
+    ///
+    /// Reserved for [`InputParameter::interrupt_calculation_duration`]; the
+    /// calculation is currently never interrupted, so this is always `false`.
     pub was_calculation_interrupted: bool,
-    /// Duration of the calculation in microseconds
+    /// Duration of the last [`update`](crate::ruckig::Ruckig::update) call in
+    /// microseconds (always `0.0` without the `std` feature)
     pub calculation_duration: f64,
 }
 
@@ -67,6 +71,10 @@ impl<const DOF: usize> Default for OutputParameter<DOF> {
 }
 
 impl<const DOF: usize> OutputParameter<DOF> {
+    /// Create new output parameters with all states set to zero.
+    ///
+    /// `dofs` is the number of degrees of freedom for heap allocation
+    /// (`DOF == 0`) and is ignored for stack allocation (`DOF > 0`).
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
             degrees_of_freedom: dofs.unwrap_or(DOF),
@@ -91,6 +99,7 @@ impl<const DOF: usize> OutputParameter<DOF> {
         output.trajectory.reserve_sections(max_number_of_waypoints + 1);
         output
     }
+
     /// Updates the current kinematic state in the input parameter with the new state from output
     ///
     /// This is a crucial method for continuous trajectory generation. After each update step,

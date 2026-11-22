@@ -18,6 +18,8 @@ type DirectedLimits = (f64, f64, f64, f64, f64);
 type TwoStepTiming = fn(&mut PositionThirdOrderStep1, f64, f64, f64, f64, f64);
 
 #[derive(Debug, Default, Clone)]
+/// Step 1 solver for the third-order position interface: calculates the
+/// time-optimal profile and the blocked duration intervals.
 pub struct PositionThirdOrderStep1 {
     v0: f64,
     a0: f64,
@@ -44,9 +46,15 @@ pub struct PositionThirdOrderStep1 {
     // Max 5 valid profiles + 1 spare for numerical issues
     valid_profiles: [Profile; 6],
     current_index: usize,
+
+    // Solve the quartics relative to the magnitude of their roots (fallback)
+    scaled_roots: bool,
 }
 
 impl PositionThirdOrderStep1 {
+    /// Create a solver for moving from state `(p0, v0, a0)` to `(pf, vf, af)`
+    /// within the velocity limits `[v_min, v_max]`, acceleration limits
+    /// `[a_min, a_max]` and maximal jerk `j_max`.
     pub fn new(
         p0: f64,
         v0: f64,
@@ -93,6 +101,7 @@ impl PositionThirdOrderStep1 {
             j_max_j_max,
             valid_profiles: Default::default(),
             current_index: 0,
+            scaled_roots: false,
         }
     }
 
@@ -488,14 +497,19 @@ impl PositionThirdOrderStep1 {
             c3 + (c2 + (c1 + (c0 + t) * t) * t) * t,
         ];
 
-        let roots_none = roots::solve_quart_monic_arr(&polynom_none);
+        let solve_quart_monic = if self.scaled_roots {
+            roots::solve_quart_monic_scaled
+        } else {
+            roots::solve_quart_monic_arr
+        };
+        let roots_none = solve_quart_monic(&polynom_none);
         let roots_acc0 = if may_have_positive_root(&polynom_acc0_min) {
-            roots::solve_quart_monic_arr(&polynom_acc0)
+            solve_quart_monic(&polynom_acc0)
         } else {
             roots::PositiveSet::new()
         };
         let roots_acc1 = if may_have_positive_root(&polynom_acc1) {
-            roots::solve_quart_monic_arr(&polynom_acc1)
+            solve_quart_monic(&polynom_acc1)
         } else {
             roots::PositiveSet::new()
         };
@@ -1046,6 +1060,13 @@ impl PositionThirdOrderStep1 {
         false
     }
 
+    /// Calculate the time-optimal profile for this DoF.
+    ///
+    /// Writes the minimal-duration profile into `block.p_min` (with the brake
+    /// and acceleration pre-trajectories and boundary state taken from
+    /// `input`), sets `block.t_min` and, where applicable, the blocked duration
+    /// intervals `block.a` / `block.b`. Returns `false` if no valid profile was
+    /// found.
     pub fn get_profile(&mut self, input: &Profile, block: &mut Block) -> bool {
         // Zero-limits special case
         if self._j_max == 0.0 || self._a_max == 0.0 || self._a_min == 0.0 {
@@ -1088,15 +1109,16 @@ impl PositionThirdOrderStep1 {
             -self._j_max,
         );
 
+        // Search in the direction of the target first
+        let directions = if self.pd >= 0.0 {
+            [up, down]
+        } else {
+            [down, up]
+        };
+
         // Left as soon as the valid profiles are complete
         'search: {
             if f64::abs(self.vf) < f64::EPSILON && f64::abs(self.af) < f64::EPSILON {
-                // Search in the direction of the target first
-                let directions = if self.pd >= 0.0 {
-                    [up, down]
-                } else {
-                    [down, up]
-                };
 
                 if f64::abs(self.v0) < f64::EPSILON
                     && f64::abs(self.a0) < f64::EPSILON
@@ -1153,6 +1175,26 @@ impl PositionThirdOrderStep1 {
                     }
                 }
             }
+
+            // Fallback for short profiles: the quartic solver takes
+            // coefficients below the machine epsilon for zero, which loses
+            // roots (durations) far below one whose polynomial coefficients
+            // are that small. This happens in particular for a state on the
+            // final jerk phase of a profile with a high jerk limit.
+            self.scaled_roots = true;
+            if f64::abs(self.vf) < f64::EPSILON && f64::abs(self.af) < f64::EPSILON {
+                for (v_max, v_min, a_max, a_min, j_max) in directions {
+                    self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+                    if self.current_index > 0 {
+                        break;
+                    }
+                }
+            } else {
+                for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                    self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, false);
+                }
+            }
+            self.scaled_roots = false;
         }
 
         Block::calculate_block(

@@ -103,6 +103,11 @@ pub trait RuckigErrorHandler {
     fn handle_calculator_error(message: &str) -> Result<(), RuckigError>;
 }
 
+/// Error handler that returns every error as `Err`
+///
+/// Validation errors become [`RuckigError::ValidationError`] and calculation
+/// errors [`RuckigError::CalculatorError`]. This is the recommended handler
+/// unless errors must never interrupt the control loop.
 #[derive(Debug, Default, Clone)]
 pub struct ThrowErrorHandler;
 
@@ -116,6 +121,13 @@ impl RuckigErrorHandler for ThrowErrorHandler {
     }
 }
 
+/// Error handler that silently ignores all errors
+///
+/// Validation and calculation continue as if no error occurred; failures are
+/// still reported through the returned [`RuckigResult`](crate::result::RuckigResult)
+/// (e.g. [`RuckigResult::ErrorInvalidInput`](crate::result::RuckigResult::ErrorInvalidInput)).
+/// Error messages are not even formatted (see
+/// [`RuckigErrorHandler::IGNORES_ERRORS`]).
 #[derive(Debug, Default, Clone)]
 pub struct IgnoreErrorHandler;
 

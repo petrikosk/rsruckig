@@ -10,14 +10,18 @@ use num_traits::Float;
 
 const COS_120: f64 = -0.50;
 const SIN_120: f64 = 0.866_025_403_784_438_6;
+/// Convergence tolerance of the polynomial root refinement in [`shrink_interval`].
 pub const TOLERANCE: f64 = 1e-14;
 
+/// Returns the square of `v`.
 pub fn pow2<T: core::ops::Mul<Output = T> + Copy>(v: T) -> T {
     v * v
 }
 
+/// A fixed-capacity set of at most `N` unique values, stored on the stack.
 #[derive(Debug)]
 pub struct Set<T, const N: usize> {
+    /// The stored values in insertion order.
     pub data: ArrayVec<T, N>,
 }
 
@@ -28,16 +32,23 @@ impl<T: Copy + Default + PartialEq, const N: usize> Default for Set<T, N> {
 }
 
 impl<T: Copy + Default + PartialEq, const N: usize> Set<T, N> {
+    /// Creates an empty set.
     pub fn new() -> Self {
         Set {
             data: ArrayVec::<T, N>::new(),
         }
     }
 
+    /// Returns the stored values as a slice.
     pub fn begin(&self) -> &[T] {
         &self.data[..]
     }
 
+    /// Inserts `value` unless an equal value is already stored.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the set already holds `N` values.
     pub fn insert(&mut self, value: T) {
         if !self.data.contains(&value) {
             self.data.push(value);
@@ -72,20 +83,27 @@ impl<'a, T, const N: usize> IntoIterator for &'a mut Set<T, N> {
     }
 }
 
+/// A [`Set`] of `f64` that only accepts non-negative values, used to collect
+/// the non-negative real roots of a polynomial.
+///
+/// Consuming iteration (and mutable iteration) yields the values in ascending order.
 #[derive(Debug)]
 pub struct PositiveSet<const N: usize>(pub Set<f64, N>);
 
 impl<const N: usize> PositiveSet<N> {
+    /// Creates an empty set.
     pub fn new() -> Self {
         PositiveSet(Set::new())
     }
 
+    /// Inserts `value` if it is non-negative and not already stored.
     pub fn insert(&mut self, value: f64) {
         if value >= 0.0 {
             self.0.insert(value);
         }
     }
 
+    /// Returns the stored values (in insertion order) as a slice.
     pub fn get_data(&self) -> &[f64] {
         self.0.begin()
     }
@@ -127,7 +145,9 @@ impl<const N: usize> Default for PositiveSet<N> {
     }
 }
 
-/// Calculate all roots of a*x^3 + b*x^2 + c*x + d = 0
+/// Calculates the non-negative real roots of `a*x^3 + b*x^2 + c*x + d = 0`.
+///
+/// Degenerates to the quadratic or linear case for vanishing leading coefficients.
 #[inline]
 pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
     let mut roots = PositiveSet::new();
@@ -213,9 +233,11 @@ pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
     roots
 }
 
-// Solve resolvent eqaution of corresponding Quartic equation
-// The input x must be of length 3
-// Number of zeros are returned
+/// Solves the resolvent cubic `x^3 + a*x^2 + b*x + c = 0` of a quartic equation.
+///
+/// The real roots are written to `x` and their number (1, 2 or 3) is returned.
+/// If only one real root exists, `x[1]` and `x[2]` hold the real and imaginary
+/// part of the complex pair.
 #[inline]
 pub fn solve_resolvent(x: &mut [f64; 3], a: f64, b: f64, c: f64) -> usize {
     let a = a / 3.0;
@@ -258,7 +280,11 @@ pub fn solve_resolvent(x: &mut [f64; 3], a: f64, b: f64, c: f64) -> usize {
     }
 }
 
-/// Calculate all roots of the monic quartic equation: x^4 + a*x^3 + b*x^2 + c*x + d = 0
+/// Calculates the non-negative real roots of the monic quartic equation
+/// `x^4 + a*x^3 + b*x^2 + c*x + d = 0`.
+///
+/// Coefficients below the machine epsilon are treated as zero, which suits
+/// roots of order one. See [`solve_quart_monic_scaled`] for small roots.
 #[inline]
 pub fn solve_quart_monic_coeffs(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<4> {
     let mut roots = PositiveSet::new();
@@ -354,12 +380,54 @@ pub fn solve_quart_monic_coeffs(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<4
     roots
 }
 
+/// Calculates the non-negative real roots of the monic quartic
+/// `x^4 + p[0]*x^3 + p[1]*x^2 + p[2]*x + p[3] = 0`.
+///
+/// See [`solve_quart_monic_coeffs`].
 #[inline]
 pub fn solve_quart_monic_arr(polynom: &[f64; 4]) -> PositiveSet<4> {
     solve_quart_monic_coeffs(polynom[0], polynom[1], polynom[2], polynom[3])
 }
 
-// Currently Rust doesn't support const generics, so using ArrayVec instead of array
+/// Calculates the non-negative real roots of the monic quartic equation
+/// `x^4 + a*x^3 + b*x^2 + c*x + d = 0` with zero tests relative to the
+/// magnitude of the roots.
+///
+/// [`solve_quart_monic_coeffs`] treats coefficients below the machine epsilon
+/// as zero. The coefficients of a quartic with roots of the magnitude `s`
+/// scale with up to `s^4` however, so that e.g. durations of some 1e-4 lead
+/// to a constant term of 1e-16 that is far from negligible: dropping it loses
+/// the root. This variant solves the quartic in the normalized variable
+/// `x / s` instead.
+pub fn solve_quart_monic_scaled(polynom: &[f64; 4]) -> PositiveSet<4> {
+    let [a, b, c, d] = *polynom;
+
+    // Upper bound of the root magnitudes up to a factor of two (Fujiwara)
+    let magnitude = a
+        .abs()
+        .max(b.abs().sqrt())
+        .max(c.abs().cbrt())
+        .max(d.abs().sqrt().sqrt());
+    if !(1e-60..1.0).contains(&magnitude) {
+        return solve_quart_monic_coeffs(a, b, c, d);
+    }
+
+    // The power of two above the magnitude: scaling by it is exact
+    let exponent = (magnitude.to_bits() >> 52) & 0x7ff;
+    let s = f64::from_bits((exponent + 1) << 52);
+    let s2 = s * s;
+
+    let mut roots = solve_quart_monic_coeffs(a / s, b / s2, c / (s2 * s), d / (s2 * s2));
+    for root in roots.0.data.iter_mut() {
+        *root *= s;
+    }
+    roots
+}
+
+/// Returns the coefficients of the derivative of the polynomial `coeffs`.
+///
+/// Coefficients are ordered from the highest degree down to the constant term.
+/// `coeffs` must not be empty.
 #[inline]
 pub fn poly_deri<const N: usize>(coeffs: &ArrayVec<f64, N>) -> ArrayVec<f64, N> {
     let mut deriv = ArrayVec::<f64, N>::new();
@@ -370,6 +438,10 @@ pub fn poly_deri<const N: usize>(coeffs: &ArrayVec<f64, N>) -> ArrayVec<f64, N> 
     deriv
 }
 
+/// Returns the derivative of the monic polynomial `monic_coeffs`, normalized
+/// to be monic again (i.e. divided by the degree).
+///
+/// Coefficients are ordered from the highest degree down to the constant term.
 #[inline]
 pub fn poly_monic_deri<const N: usize>(monic_coeffs: &ArrayVec<f64, N>) -> ArrayVec<f64, N> {
     let mut deriv = ArrayVec::<f64, N>::new();
@@ -381,6 +453,9 @@ pub fn poly_monic_deri<const N: usize>(monic_coeffs: &ArrayVec<f64, N>) -> Array
     deriv
 }
 
+/// Evaluates the polynomial `p` at `x`.
+///
+/// Coefficients are ordered from the highest degree down to the constant term.
 #[inline]
 pub fn poly_eval<const N: usize>(p: &ArrayVec<f64, N>, x: f64) -> f64 {
     let mut result = 0.0;
@@ -399,12 +474,17 @@ pub fn poly_eval<const N: usize>(p: &ArrayVec<f64, N>, x: f64) -> f64 {
     result
 }
 
-// Wrapper for poly_eval with default value for MAX_ITS
+/// [`shrink_interval`] with the default limit of 128 iterations.
 #[inline]
 pub fn shrink_interval_default<const N: usize>(p: &ArrayVec<f64, N>, l: f64, h: f64) -> f64 {
     shrink_interval::<N, 128>(p, l, h)
 }
 
+/// Refines a root of the polynomial `p` within the bracket `[l, h]` using a
+/// safeguarded Newton–Raphson method (falling back to bisection), with at most
+/// `MAX_ITS` iterations.
+///
+/// The polynomial values at `l` and `h` should have opposite signs.
 #[inline]
 pub fn shrink_interval<const N: usize, const MAX_ITS: usize>(
     p: &ArrayVec<f64, N>,

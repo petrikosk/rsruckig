@@ -45,41 +45,24 @@ use crate::alloc::format;
 /// # Type Parameters
 ///
 /// * `DOF` - Number of degrees of freedom. Use a specific number (>0) for stack allocation or 0 for heap allocation.
-/// * `E` - Error handler type that implements RuckigErrorHandler trait.
+/// * `E` - Error handler type that implements the [`RuckigErrorHandler`] trait.
 ///
 /// # Examples
 ///
-/// Stack allocation (3 DoF):
 /// ```
 /// use rsruckig::prelude::*;
 ///
-/// // Create a Ruckig instance with 3 DoF and 0.01s control cycle
-/// let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.01);
-/// ```
+/// // Stack allocation: 3 DoF fixed at compile time, 0.01 s control cycle
+/// let otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.01);
 ///
-/// Heap allocation (dynamic DoF):
-/// ```
-/// use rsruckig::prelude::*;
-///
-/// // Create a Ruckig instance with 6 DoF and 0.01s control cycle
-/// let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(6), 0.01);
-/// ```
-///
-/// # Example
-///
-/// ```
-/// use rsruckig::prelude::*;
-///
-/// // Stack allocation (3 DoF)
-/// let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, 0.01);
-///
-/// // Heap allocation (3 DoF)
-/// let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(3), 0.01);
+/// // Heap allocation: 6 DoF given at runtime, 0.01 s control cycle
+/// let otg = Ruckig::<0, ThrowErrorHandler>::new(Some(6), 0.01);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
     current_input: InputParameter<DOF>,
     current_input_initialized: bool,
+    /// Calculator for state-to-state trajectories (without intermediate waypoints)
     pub calculator: TargetCalculator<DOF>,
     /// Calculator for trajectories through intermediate waypoints, created
     /// lazily on the first waypoint calculation (or eagerly by
@@ -90,7 +73,10 @@ pub struct Ruckig<const DOF: usize, E: RuckigErrorHandler> {
     /// time-optimal at the cost of calculation time; `0` disables refinement
     /// and uses the raw (conservative) heuristic chain.
     pub waypoint_refinement_sweeps: usize,
+    /// Number of degrees of freedom
     pub degrees_of_freedom: usize,
+    /// Control cycle duration in seconds, used as the time step of
+    /// [`update`](Ruckig::update) and for duration discretization
     pub delta_time: f64,
     _error_handler: PhantomData<E>,
 }
@@ -247,7 +233,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     /// Validate the input parameters and Ruckig instance for trajectory calculation
     ///
     /// This method checks:
-    /// - Input parameter validity through InputParameter::validate
+    /// - Input parameter validity through [`InputParameter::validate`]
     /// - Compatibility between the duration discretization mode and delta time
     ///
     /// # Parameters
@@ -259,7 +245,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     /// # Returns
     ///
     /// * `Ok(())` - If validation passes
-    /// * `Err(RuckigError)` - If validation fails (when using ThrowErrorHandler)
+    /// * `Err(RuckigError)` - If validation fails (when using [`ThrowErrorHandler`](crate::error::ThrowErrorHandler))
     ///
     /// # Note
     ///
@@ -299,11 +285,16 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     /// * `input` - The input parameters defining the trajectory
     /// * `traj` - The trajectory object to store the calculated trajectory
     ///
+    /// Trajectories with [`InputParameter::intermediate_positions`] are
+    /// calculated through all waypoints.
+    ///
     /// # Returns
     ///
-    /// * `Ok(RuckigResult::Working)` - If the calculation was successful and needs more iterations
-    /// * `Ok(RuckigResult::Finished)` - If the calculation was successful and the trajectory is complete
-    /// * `Err(RuckigError)` - If an error occurred during calculation (when using ThrowErrorHandler)
+    /// * `Ok(RuckigResult::Working)` - The trajectory was calculated successfully
+    /// * `Ok(RuckigResult::Error*)` - The calculation failed, e.g. with
+    ///   [`RuckigResult::ErrorPositionalLimits`] or
+    ///   [`RuckigResult::ErrorExecutionTimeCalculation`] (the trajectory is not valid)
+    /// * `Err(RuckigError)` - If validation or calculation failed (when using [`ThrowErrorHandler`](crate::error::ThrowErrorHandler))
     ///
     /// # Example
     ///
@@ -368,7 +359,8 @@ impl<const DOF: usize, E: RuckigErrorHandler> Ruckig<DOF, E> {
     ///
     /// * `Ok(RuckigResult::Working)` - If the trajectory is still being executed
     /// * `Ok(RuckigResult::Finished)` - If the trajectory has reached the target
-    /// * `Err(RuckigError)` - If an error occurred during calculation (when using ThrowErrorHandler)
+    /// * `Ok(RuckigResult::Error*)` - The (re)calculation of the trajectory failed
+    /// * `Err(RuckigError)` - If an error occurred during calculation (when using [`ThrowErrorHandler`](crate::error::ThrowErrorHandler))
     ///
     /// # Example
     ///

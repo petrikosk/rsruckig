@@ -11,6 +11,8 @@ use num_traits::Float;
 /// opposite direction swaps the bounds
 type DirectedLimits = (f64, f64, f64, f64);
 
+/// Step 1 solver for the second-order position interface: calculates the
+/// time-optimal profile and the blocked duration intervals.
 #[derive(Debug)]
 pub struct PositionSecondOrderStep1 {
     v0: f64,
@@ -25,7 +27,9 @@ pub struct PositionSecondOrderStep1 {
 }
 
 impl PositionSecondOrderStep1 {
-    /// Create a new instance of `PositionSecondOrderStep2`
+    /// Create a solver for moving from state `(p0, v0)` to `(pf, vf)` within
+    /// the velocity limits `[v_min, v_max]` and acceleration limits
+    /// `[a_min, a_max]`.
     pub fn new(
         p0: f64,
         v0: f64,
@@ -213,6 +217,13 @@ impl PositionSecondOrderStep1 {
         false
     }
 
+    /// Calculate the time-optimal profile for this DoF.
+    ///
+    /// Writes the minimal-duration profile into `block.p_min` (with the brake
+    /// and acceleration pre-trajectories and boundary state taken from
+    /// `input`), sets `block.t_min` and, where applicable, the blocked duration
+    /// intervals `block.a` / `block.b`. Returns `false` if no valid profile was
+    /// found.
     pub fn get_profile(&mut self, input: &Profile, block: &mut Block) -> bool {
         // Zero-limits special case
         if self._v_max == 0.0 && self._v_min == 0.0 {
