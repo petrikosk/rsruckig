@@ -7,6 +7,10 @@ use crate::{
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
+/// The limits `(v_max, v_min, a_max, a_min)` of a search direction; the
+/// opposite direction swaps the bounds
+type DirectedLimits = (f64, f64, f64, f64);
+
 #[derive(Debug)]
 pub struct PositionSecondOrderStep1 {
     v0: f64,
@@ -229,78 +233,35 @@ impl PositionSecondOrderStep1 {
         self.current_index = 0;
         let mut profile = self.valid_profiles[0];
 
+        let up: DirectedLimits = (self._v_max, self._v_min, self._a_max, self._a_min);
+        let down: DirectedLimits = (self._v_min, self._v_max, self._a_min, self._a_max);
+
         if f64::abs(self.vf) < f64::EPSILON {
-            // There is no blocked interval when self.vf==0.0, so return after first found profile
-            let v_max = if self.pd >= 0.0 {
-                self._v_max
+            // There is no blocked interval when vf==0, so return after first
+            // found profile, searching in the direction of the target first
+            let directions = if self.pd >= 0.0 {
+                [up, down]
             } else {
-                self._v_min
+                [down, up]
             };
-            // below lines to be converted to match rust
-            let v_min = if self.pd >= 0.0 {
-                self._v_min
-            } else {
-                self._v_max
-            };
-            let a_max = if self.pd >= 0.0 {
-                self._a_max
-            } else {
-                self._a_min
-            };
-            let a_min = if self.pd >= 0.0 {
-                self._a_min
-            } else {
-                self._a_max
-            };
-
-            self.time_none(v_max, v_min, a_max, a_min, true);
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
+            for (v_max, v_min, a_max, a_min) in directions {
+                self.time_none(v_max, v_min, a_max, a_min, true);
+                if self.current_index > 0 {
+                    break;
+                }
+                self.time_acc0(&mut profile, v_max, v_min, a_max, a_min, true);
+                if self.current_index > 0 {
+                    break;
+                }
             }
-            self.time_acc0(&mut profile, v_max, v_min, a_max, a_min, true);
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-
-            self.time_none(v_min, v_max, a_min, a_max, true);
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_acc0(&mut profile, v_min, v_max, a_min, a_max, true);
         } else {
-            self.time_none(self._v_max, self._v_min, self._a_max, self._a_min, false);
-            self.time_none(self._v_min, self._v_max, self._a_min, self._a_max, false);
-            self.time_acc0(
-                &mut profile,
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                false,
-            );
-            self.time_acc0(
-                &mut profile,
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                false,
-            );
+            // The order of the valid profiles matters for the block calculation
+            for (v_max, v_min, a_max, a_min) in [up, down] {
+                self.time_none(v_max, v_min, a_max, a_min, false);
+            }
+            for (v_max, v_min, a_max, a_min) in [up, down] {
+                self.time_acc0(&mut profile, v_max, v_min, a_max, a_min, false);
+            }
         }
 
         Block::calculate_block(

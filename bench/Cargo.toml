@@ -10,7 +10,7 @@ path = "src/benchmark_target.rs"
 
 [dependencies]
 rsruckig = { path = "../lib" }
-gnuplot = "0.0.39"
+plotters = { version = "0.3", default-features = false, features = ["svg_backend"] }
 rand_distr = "0.4.3"
 rand_pcg = "0.3.1"
 rand_core = "0.6.4"

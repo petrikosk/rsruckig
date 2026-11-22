@@ -29,7 +29,7 @@
 use crate::alloc::format;
 use crate::alloc::vec::Vec;
 use crate::brake::velocity_cap_third_order;
-use crate::calculator_target::TargetCalculator;
+use crate::calculator_target::{DurationBudget, TargetCalculator};
 use crate::error::{IgnoreErrorHandler, RuckigError, RuckigErrorHandler};
 use crate::input_parameter::{ControlInterface, InputParameter, Synchronization};
 use crate::result::RuckigResult;
@@ -137,6 +137,29 @@ struct AdjacentLimits {
     position_cap: f64,
 }
 
+/// State-to-state solver for one section of the chain
+#[derive(Debug, Clone)]
+struct SectionSolver<const DOF: usize> {
+    calculator: TargetCalculator<DOF>,
+    /// Scratch input of the section
+    input: InputParameter<DOF>,
+    /// Scratch trajectory, always a single section
+    trajectory: Trajectory<DOF>,
+    /// The section `input`'s limits are configured for
+    section: Option<usize>,
+}
+
+impl<const DOF: usize> SectionSolver<DOF> {
+    fn new(dofs: Option<usize>) -> Self {
+        Self {
+            calculator: TargetCalculator::new(dofs),
+            input: InputParameter::new(dofs),
+            trajectory: Trajectory::new(dofs),
+            section: None,
+        }
+    }
+}
+
 /// Calculator for trajectories through intermediate waypoints
 ///
 /// Chains state-to-state sections calculated by [`TargetCalculator`], using
@@ -145,11 +168,10 @@ struct AdjacentLimits {
 /// [`InputParameter::intermediate_positions`] is non-empty.
 #[derive(Debug, Clone)]
 pub struct WaypointsCalculator<const DOF: usize> {
-    calculator: TargetCalculator<DOF>,
-    /// Scratch input for a single section
-    section_input: InputParameter<DOF>,
-    /// Scratch trajectory, always a single section
-    section_trajectory: Trajectory<DOF>,
+    /// Two section solvers, so that both sections adjacent to a waypoint keep
+    /// their state (limits, step 1 results) while its pass-through state is
+    /// refined. Section `s` is always solved by `solvers[s % 2]`.
+    solvers: [SectionSolver<DOF>; 2],
     /// Pass-through velocities, one entry per waypoint
     waypoint_velocities: Vec<DataArrayOrVec<f64, DOF>>,
     /// Pass-through accelerations, one entry per waypoint
@@ -174,9 +196,7 @@ pub struct WaypointsCalculator<const DOF: usize> {
 impl<const DOF: usize> WaypointsCalculator<DOF> {
     pub fn new(dofs: Option<usize>) -> Self {
         Self {
-            calculator: TargetCalculator::new(dofs),
-            section_input: InputParameter::new(dofs),
-            section_trajectory: Trajectory::new(dofs),
+            solvers: [SectionSolver::new(dofs), SectionSolver::new(dofs)],
             waypoint_velocities: Vec::new(),
             waypoint_accelerations: Vec::new(),
             section_durations: Vec::new(),
@@ -192,11 +212,15 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
     /// to `max_number_of_waypoints` intermediate positions
     pub fn with_waypoints(dofs: Option<usize>, max_number_of_waypoints: usize) -> Self {
         let mut calculator = Self::new(dofs);
-        calculator.waypoint_velocities.reserve(max_number_of_waypoints);
+        calculator
+            .waypoint_velocities
+            .reserve(max_number_of_waypoints);
         calculator
             .waypoint_accelerations
             .reserve(max_number_of_waypoints);
-        calculator.section_durations.reserve(max_number_of_waypoints + 1);
+        calculator
+            .section_durations
+            .reserve(max_number_of_waypoints + 1);
         calculator
             .section_min_durations
             .reserve(max_number_of_waypoints + 1);
@@ -214,10 +238,7 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
 
     /// Position of chain point `k` (0 = current, 1..=n = waypoints, n+1 = target)
     #[inline]
-    fn chain_position<'a>(
-        inp: &'a InputParameter<DOF>,
-        k: usize,
-    ) -> &'a DataArrayOrVec<f64, DOF> {
+    fn chain_position(inp: &InputParameter<DOF>, k: usize) -> &DataArrayOrVec<f64, DOF> {
         let n = inp.intermediate_positions.len();
         if k == 0 {
             &inp.current_position
@@ -232,42 +253,115 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
     fn adjacent_limits(&self, inp: &InputParameter<DOF>, k: usize, dof: usize) -> AdjacentLimits {
         let (s_prev, s_next) = (k - 1, k);
 
-        let vmax_prev = eff_limit(&inp.per_section_max_velocity, inp.max_velocity[dof], s_prev, dof);
-        let vmax_next = eff_limit(&inp.per_section_max_velocity, inp.max_velocity[dof], s_next, dof);
-        let vmin_prev = eff_min_limit(&inp.per_section_min_velocity, &inp.min_velocity, vmax_prev, s_prev, dof);
-        let vmin_next = eff_min_limit(&inp.per_section_min_velocity, &inp.min_velocity, vmax_next, s_next, dof);
-        let amax_prev = eff_limit(&inp.per_section_max_acceleration, inp.max_acceleration[dof], s_prev, dof);
-        let amax_next = eff_limit(&inp.per_section_max_acceleration, inp.max_acceleration[dof], s_next, dof);
-        let amin_prev = eff_min_limit(&inp.per_section_min_acceleration, &inp.min_acceleration, amax_prev, s_prev, dof);
-        let amin_next = eff_min_limit(&inp.per_section_min_acceleration, &inp.min_acceleration, amax_next, s_next, dof);
+        let vmax_prev = eff_limit(
+            &inp.per_section_max_velocity,
+            inp.max_velocity[dof],
+            s_prev,
+            dof,
+        );
+        let vmax_next = eff_limit(
+            &inp.per_section_max_velocity,
+            inp.max_velocity[dof],
+            s_next,
+            dof,
+        );
+        let vmin_prev = eff_min_limit(
+            &inp.per_section_min_velocity,
+            &inp.min_velocity,
+            vmax_prev,
+            s_prev,
+            dof,
+        );
+        let vmin_next = eff_min_limit(
+            &inp.per_section_min_velocity,
+            &inp.min_velocity,
+            vmax_next,
+            s_next,
+            dof,
+        );
+        let amax_prev = eff_limit(
+            &inp.per_section_max_acceleration,
+            inp.max_acceleration[dof],
+            s_prev,
+            dof,
+        );
+        let amax_next = eff_limit(
+            &inp.per_section_max_acceleration,
+            inp.max_acceleration[dof],
+            s_next,
+            dof,
+        );
+        let amin_prev = eff_min_limit(
+            &inp.per_section_min_acceleration,
+            &inp.min_acceleration,
+            amax_prev,
+            s_prev,
+            dof,
+        );
+        let amin_next = eff_min_limit(
+            &inp.per_section_min_acceleration,
+            &inp.min_acceleration,
+            amax_next,
+            s_next,
+            dof,
+        );
         let jmax_prev = eff_limit(&inp.per_section_max_jerk, inp.max_jerk[dof], s_prev, dof);
         let jmax_next = eff_limit(&inp.per_section_max_jerk, inp.max_jerk[dof], s_next, dof);
 
         let d_prev = Self::chain_position(inp, k)[dof] - Self::chain_position(inp, k - 1)[dof];
         let d_next = Self::chain_position(inp, k + 1)[dof] - Self::chain_position(inp, k)[dof];
-        let sign = if d_prev * d_next > 0.0 { d_next.signum() } else { 0.0 };
+        let sign = if d_prev * d_next > 0.0 {
+            d_next.signum()
+        } else {
+            0.0
+        };
 
         let j_max = jmax_prev.min(jmax_next);
         let position_limits_set = inp.max_position.is_some()
             || inp.min_position.is_some()
             || inp.per_section_max_position.is_some()
             || inp.per_section_min_position.is_some();
-        let position_cap = if position_limits_set && j_max > 0.0 && j_max.is_finite() {
-            // The stopping distance from the waypoint state must fit inside
-            // the position limits of both adjacent sections
-            let w = Self::chain_position(inp, k)[dof];
-            let max_pos = eff_min_max_position(&inp.per_section_max_position, &inp.max_position, f64::INFINITY, s_prev, dof)
-                .min(eff_min_max_position(&inp.per_section_max_position, &inp.max_position, f64::INFINITY, s_next, dof));
-            let min_pos = eff_min_max_position(&inp.per_section_min_position, &inp.min_position, f64::NEG_INFINITY, s_prev, dof)
-                .max(eff_min_max_position(&inp.per_section_min_position, &inp.min_position, f64::NEG_INFINITY, s_next, dof));
-            // Use the weaker deceleration capability of both sections
-            let a_min_eff = amin_prev.max(amin_next);
-            let a_max_eff = amax_prev.min(amax_next);
-            velocity_cap_third_order(max_pos - w, a_min_eff, j_max)
-                .min(velocity_cap_third_order(w - min_pos, a_max_eff, j_max))
-        } else {
-            f64::INFINITY
-        };
+        let position_cap =
+            if position_limits_set && j_max > 0.0 && j_max.is_finite() {
+                // The stopping distance from the waypoint state must fit inside
+                // the position limits of both adjacent sections
+                let w = Self::chain_position(inp, k)[dof];
+                let max_pos = eff_min_max_position(
+                    &inp.per_section_max_position,
+                    &inp.max_position,
+                    f64::INFINITY,
+                    s_prev,
+                    dof,
+                )
+                .min(eff_min_max_position(
+                    &inp.per_section_max_position,
+                    &inp.max_position,
+                    f64::INFINITY,
+                    s_next,
+                    dof,
+                ));
+                let min_pos = eff_min_max_position(
+                    &inp.per_section_min_position,
+                    &inp.min_position,
+                    f64::NEG_INFINITY,
+                    s_prev,
+                    dof,
+                )
+                .max(eff_min_max_position(
+                    &inp.per_section_min_position,
+                    &inp.min_position,
+                    f64::NEG_INFINITY,
+                    s_next,
+                    dof,
+                ));
+                // Use the weaker deceleration capability of both sections
+                let a_min_eff = amin_prev.max(amin_next);
+                let a_max_eff = amax_prev.min(amax_next);
+                velocity_cap_third_order(max_pos - w, a_min_eff, j_max)
+                    .min(velocity_cap_third_order(w - min_pos, a_max_eff, j_max))
+            } else {
+                f64::INFINITY
+            };
 
         AdjacentLimits {
             v_max: vmax_prev.min(vmax_next),
@@ -305,14 +399,28 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
                     continue;
                 }
 
-                let d_prev = Self::chain_position(inp, k)[dof] - Self::chain_position(inp, k - 1)[dof];
-                let d_next = Self::chain_position(inp, k + 1)[dof] - Self::chain_position(inp, k)[dof];
+                let d_prev =
+                    Self::chain_position(inp, k)[dof] - Self::chain_position(inp, k - 1)[dof];
+                let d_next =
+                    Self::chain_position(inp, k + 1)[dof] - Self::chain_position(inp, k)[dof];
                 // Directional velocity limit of both adjacent sections
-                let v_lim = if limits.sign > 0.0 { limits.v_max } else { -limits.v_min };
+                let v_lim = if limits.sign > 0.0 {
+                    limits.v_max
+                } else {
+                    -limits.v_min
+                };
                 // Acceleration capability toward the waypoint and deceleration
                 // capability after it, in the direction of motion
-                let a_acc = if limits.sign > 0.0 { limits.a_max } else { -limits.a_min };
-                let a_dec = if limits.sign > 0.0 { -limits.a_min } else { limits.a_max };
+                let a_acc = if limits.sign > 0.0 {
+                    limits.a_max
+                } else {
+                    -limits.a_min
+                };
+                let a_dec = if limits.sign > 0.0 {
+                    -limits.a_min
+                } else {
+                    limits.a_max
+                };
                 // Acceleration-limited reachability over the adjacent segment
                 // lengths: the velocity must be reachable from rest before the
                 // waypoint and reducible to rest after it
@@ -335,35 +443,32 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         }
     }
 
-    /// Write the kinematic state of chain point `k` into the scratch input's
-    /// current state
-    fn set_current_from_chain(&mut self, inp: &InputParameter<DOF>, k: usize) {
+    /// Write the boundary states of `section` (chain points `section` and
+    /// `section + 1`) into its solver's scratch input
+    fn set_section_states(&mut self, inp: &InputParameter<DOF>, section: usize) {
         let n = inp.intermediate_positions.len();
-        let s = &mut self.section_input;
-        if k == 0 {
+        let s = &mut self.solvers[section % 2].input;
+
+        if section == 0 {
             s.current_position.copy_from(&inp.current_position);
             s.current_velocity.copy_from(&inp.current_velocity);
             s.current_acceleration.copy_from(&inp.current_acceleration);
         } else {
-            debug_assert!(k <= n);
-            s.current_position.copy_from(&inp.intermediate_positions[k - 1]);
-            s.current_velocity.copy_from(&self.waypoint_velocities[k - 1]);
+            s.current_position
+                .copy_from(&inp.intermediate_positions[section - 1]);
+            s.current_velocity
+                .copy_from(&self.waypoint_velocities[section - 1]);
             s.current_acceleration
-                .copy_from(&self.waypoint_accelerations[k - 1]);
+                .copy_from(&self.waypoint_accelerations[section - 1]);
         }
-    }
 
-    /// Write the kinematic state of chain point `k` into the scratch input's
-    /// target state
-    fn set_target_from_chain(&mut self, inp: &InputParameter<DOF>, k: usize) {
-        let n = inp.intermediate_positions.len();
-        let s = &mut self.section_input;
-        if k <= n {
-            debug_assert!(k >= 1);
-            s.target_position.copy_from(&inp.intermediate_positions[k - 1]);
-            s.target_velocity.copy_from(&self.waypoint_velocities[k - 1]);
+        if section < n {
+            s.target_position
+                .copy_from(&inp.intermediate_positions[section]);
+            s.target_velocity
+                .copy_from(&self.waypoint_velocities[section]);
             s.target_acceleration
-                .copy_from(&self.waypoint_accelerations[k - 1]);
+                .copy_from(&self.waypoint_accelerations[section]);
         } else {
             s.target_position.copy_from(&inp.target_position);
             s.target_velocity.copy_from(&inp.target_velocity);
@@ -371,12 +476,13 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         }
     }
 
-    /// Configure the scratch input's limits and settings for section `s`
+    /// Configure the limits and settings of `section` in its solver's scratch
+    /// input
     fn set_section_limits(&mut self, inp: &InputParameter<DOF>, section: usize) {
         let n = inp.intermediate_positions.len();
         let dofs_opt = self.dofs_opt();
         let n_dofs = self.degrees_of_freedom;
-        let s = &mut self.section_input;
+        let s = &mut self.solvers[section % 2].input;
 
         s.degrees_of_freedom = inp.degrees_of_freedom;
         s.control_interface = ControlInterface::Position;
@@ -398,15 +504,26 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
             .as_ref()
             .map(|durations| durations[section]);
 
-        for dof in 0..n_dofs {
-            s.max_velocity[dof] =
-                eff_limit(&inp.per_section_max_velocity, inp.max_velocity[dof], section, dof);
-            s.max_acceleration[dof] = eff_limit(
+        let max_velocity = |dof| {
+            eff_limit(
+                &inp.per_section_max_velocity,
+                inp.max_velocity[dof],
+                section,
+                dof,
+            )
+        };
+        let max_acceleration = |dof| {
+            eff_limit(
                 &inp.per_section_max_acceleration,
                 inp.max_acceleration[dof],
                 section,
                 dof,
-            );
+            )
+        };
+
+        for dof in 0..n_dofs {
+            s.max_velocity[dof] = max_velocity(dof);
+            s.max_acceleration[dof] = max_acceleration(dof);
             s.max_jerk[dof] = eff_limit(&inp.per_section_max_jerk, inp.max_jerk[dof], section, dof);
         }
         if inp.per_section_min_velocity.is_some() || inp.min_velocity.is_some() {
@@ -414,7 +531,7 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
                 eff_min_limit(
                     &inp.per_section_min_velocity,
                     &inp.min_velocity,
-                    eff_limit(&inp.per_section_max_velocity, inp.max_velocity[dof], section, dof),
+                    max_velocity(dof),
                     section,
                     dof,
                 )
@@ -427,12 +544,7 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
                 eff_min_limit(
                     &inp.per_section_min_acceleration,
                     &inp.min_acceleration,
-                    eff_limit(
-                        &inp.per_section_max_acceleration,
-                        inp.max_acceleration[dof],
-                        section,
-                        dof,
-                    ),
+                    max_acceleration(dof),
                     section,
                     dof,
                 )
@@ -468,59 +580,113 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         }
     }
 
-    /// Solve section `s` for the current waypoint states into the scratch
-    /// trajectory (no error handling — returns the raw result code)
+    /// Solve `section` for the current waypoint states into its solver's
+    /// scratch trajectory. No error handling: returns the raw result code, or
+    /// `None` if the duration exceeds `budget`.
+    ///
+    /// `changed` names the only DoF whose waypoint state differs from the
+    /// previous solve of this section (`None`: assume everything changed), so
+    /// that the step 1 results of the other DoFs are reused.
     fn solve_section(
         &mut self,
         inp: &InputParameter<DOF>,
         section: usize,
         delta_time: f64,
-    ) -> Result<RuckigResult, RuckigError> {
-        self.set_section_limits(inp, section);
-        self.set_current_from_chain(inp, section);
-        self.set_target_from_chain(inp, section + 1);
-        self.calculator.calculate::<IgnoreErrorHandler>(
-            &self.section_input,
-            &mut self.section_trajectory,
+        changed: Option<usize>,
+        budget: DurationBudget,
+    ) -> Result<Option<RuckigResult>, RuckigError> {
+        if self.solvers[section % 2].section != Some(section) {
+            self.set_section_limits(inp, section);
+            let solver = &mut self.solvers[section % 2];
+            solver.section = Some(section);
+            solver.calculator.invalidate_step1(None);
+        } else {
+            self.solvers[section % 2]
+                .calculator
+                .invalidate_step1(changed);
+        }
+        self.set_section_states(inp, section);
+
+        let solver = &mut self.solvers[section % 2];
+        solver.calculator.calculate_section::<IgnoreErrorHandler>(
+            &solver.input,
+            &mut solver.trajectory,
             delta_time,
+            budget,
         )
     }
 
-    /// Copy the scratch section trajectory into `traj` at `section` and record
-    /// its durations
+    /// Solve `section` from scratch, without a duration budget
+    fn solve_section_fully(
+        &mut self,
+        inp: &InputParameter<DOF>,
+        section: usize,
+        delta_time: f64,
+    ) -> Result<RuckigResult, RuckigError> {
+        let result =
+            self.solve_section(inp, section, delta_time, None, DurationBudget::UNLIMITED)?;
+        // An unlimited budget cannot be exceeded
+        Ok(result.unwrap_or(RuckigResult::Working))
+    }
+
+    /// Copy the scratch trajectory of `section` into `traj` and record its
+    /// durations
     fn commit_section(&mut self, section: usize, traj: &mut Trajectory<DOF>) {
+        let solved = &self.solvers[section % 2].trajectory;
         for dof in 0..self.degrees_of_freedom {
-            let profile = self.section_trajectory.profiles[0][dof];
+            let profile = solved.profiles[0][dof];
             debug_assert!(
                 section == 0 || profile.brake.duration == 0.0,
                 "unexpected brake pre-trajectory in section {}",
                 section
             );
             traj.profiles[section][dof] = profile;
-            self.section_min_durations[section][dof] =
-                self.section_trajectory.independent_min_durations[dof];
+            self.section_min_durations[section][dof] = solved.independent_min_durations[dof];
         }
-        self.section_durations[section] = self.section_trajectory.duration;
+        self.section_durations[section] = solved.duration;
     }
 
-    /// Solve both sections adjacent to waypoint `k` for the current waypoint
-    /// states; returns their durations, or None if either section is infeasible
-    fn eval_pair(
+    /// Try the current (candidate) state of waypoint `k`: solve both adjacent
+    /// sections and adopt their durations if the pair got faster. Returns
+    /// whether the candidate was adopted; the caller restores the waypoint
+    /// state otherwise.
+    ///
+    /// `changed` names the only DoF in which the candidate differs from the
+    /// adopted state (`None`: several DoFs).
+    fn try_candidate(
         &mut self,
         inp: &InputParameter<DOF>,
         k: usize,
         delta_time: f64,
-    ) -> Result<Option<(f64, f64)>, RuckigError> {
-        let result_prev = self.solve_section(inp, k - 1, delta_time)?;
-        if result_prev != RuckigResult::Working {
-            return Ok(None);
+        changed: Option<usize>,
+    ) -> Result<bool, RuckigError> {
+        // Hopeless candidates are abandoned as soon as the durations show it
+        let limit = self.section_durations[k - 1] + self.section_durations[k] - 1e-9;
+        let mut durations = [0.0; 2];
+        let mut offset = 0.0;
+        let mut adopted = true;
+
+        for (i, section) in [k - 1, k].into_iter().enumerate() {
+            let budget = DurationBudget { offset, limit };
+            let result = self.solve_section(inp, section, delta_time, changed, budget)?;
+            if result != Some(RuckigResult::Working) {
+                adopted = false;
+                break;
+            }
+            durations[i] = self.solvers[section % 2].trajectory.duration;
+            offset += durations[i];
         }
-        let duration_prev = self.section_trajectory.duration;
-        let result_next = self.solve_section(inp, k, delta_time)?;
-        if result_next != RuckigResult::Working {
-            return Ok(None);
+
+        if adopted {
+            self.section_durations[k - 1] = durations[0];
+            self.section_durations[k] = durations[1];
+        } else {
+            // The solvers saw a state that is about to be reverted
+            for solver in &mut self.solvers {
+                solver.calculator.invalidate_step1(changed);
+            }
         }
-        Ok(Some((duration_prev, self.section_trajectory.duration)))
+        Ok(adopted)
     }
 
     /// Refine the pass-through state of waypoint `k` by hill climbing: probe a
@@ -549,7 +715,8 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         // per-DoF moves cannot (time synchronization couples the DoFs).
         let n_vector_candidates = VELOCITY_SCALES.len() + 1;
         for candidate in 0..n_vector_candidates {
-            self.backup_velocity.copy_from(&self.waypoint_velocities[k - 1]);
+            self.backup_velocity
+                .copy_from(&self.waypoint_velocities[k - 1]);
             self.backup_acceleration
                 .copy_from(&self.waypoint_accelerations[k - 1]);
             let mut changed = false;
@@ -575,18 +742,11 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
             if !changed {
                 continue;
             }
-            let base = self.section_durations[k - 1] + self.section_durations[k];
-            match self.eval_pair(inp, k, delta_time)? {
-                Some((d_prev, d_next)) if d_prev + d_next < base - 1e-9 => {
-                    self.section_durations[k - 1] = d_prev;
-                    self.section_durations[k] = d_next;
-                    improved_any = true;
-                }
-                _ => {
-                    self.waypoint_velocities[k - 1].copy_from(&self.backup_velocity);
-                    self.waypoint_accelerations[k - 1]
-                        .copy_from(&self.backup_acceleration);
-                }
+            if self.try_candidate(inp, k, delta_time, None)? {
+                improved_any = true;
+            } else {
+                self.waypoint_velocities[k - 1].copy_from(&self.backup_velocity);
+                self.waypoint_accelerations[k - 1].copy_from(&self.backup_acceleration);
             }
         }
 
@@ -616,22 +776,32 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
                 }
                 self.waypoint_velocities[k - 1][dof] = v;
                 self.waypoint_accelerations[k - 1][dof] = a;
-                let base = self.section_durations[k - 1] + self.section_durations[k];
-                match self.eval_pair(inp, k, delta_time)? {
-                    Some((d_prev, d_next)) if d_prev + d_next < base - 1e-9 => {
-                        self.section_durations[k - 1] = d_prev;
-                        self.section_durations[k] = d_next;
-                        improved_any = true;
-                    }
-                    _ => {
-                        self.waypoint_velocities[k - 1][dof] = current_v;
-                        self.waypoint_accelerations[k - 1][dof] = current_a;
-                    }
+                if self.try_candidate(inp, k, delta_time, Some(dof))? {
+                    improved_any = true;
+                } else {
+                    self.waypoint_velocities[k - 1][dof] = current_v;
+                    self.waypoint_accelerations[k - 1][dof] = current_a;
                 }
             }
         }
 
         Ok(improved_any)
+    }
+
+    /// Report a failed section to the error handler `E`
+    #[cold]
+    fn section_error<E: RuckigErrorHandler>(
+        section: usize,
+        result: RuckigResult,
+        section_input: &InputParameter<DOF>,
+    ) -> Result<RuckigResult, RuckigError> {
+        if !E::IGNORES_ERRORS {
+            E::handle_calculator_error(&format!(
+                "error in section {} between waypoints, result {:?}, input: {}",
+                section, result, section_input
+            ))?;
+        }
+        Ok(result)
     }
 
     /// Calculate a multi-section trajectory through the intermediate waypoints
@@ -644,6 +814,11 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         let n = inp.intermediate_positions.len();
         let n_sections = n + 1;
         let dofs_opt = self.dofs_opt();
+
+        // Nothing cached by the section solvers survives a new input
+        for solver in &mut self.solvers {
+            solver.section = None;
+        }
 
         self.estimate_waypoint_states(inp);
 
@@ -666,19 +841,15 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
                         self.waypoint_velocities[section][dof] *= scale;
                     }
                 }
-                result = self.solve_section(inp, section, delta_time)?;
+                result = self.solve_section_fully(inp, section, delta_time)?;
                 if result == RuckigResult::Working {
                     break;
                 }
             }
             if result != RuckigResult::Working {
-                E::handle_calculator_error(&format!(
-                    "error in section {} between waypoints, result {:?}, input: {}",
-                    section, result, self.section_input
-                ))?;
-                return Ok(result);
+                return Self::section_error::<E>(section, result, &self.solvers[section % 2].input);
             }
-            self.section_durations[section] = self.section_trajectory.duration;
+            self.section_durations[section] = self.solvers[section % 2].trajectory.duration;
         }
 
         // Phase 2: bounded local refinement of the waypoint pass-through states
@@ -702,14 +873,10 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         // and commit the profiles and bookkeeping
         traj.duration = 0.0;
         for section in 0..n_sections {
-            let result = self.solve_section(inp, section, delta_time)?;
+            let result = self.solve_section_fully(inp, section, delta_time)?;
             debug_assert_eq!(result, RuckigResult::Working);
             if result != RuckigResult::Working {
-                E::handle_calculator_error(&format!(
-                    "error in section {} between waypoints, result {:?}, input: {}",
-                    section, result, self.section_input
-                ))?;
-                return Ok(result);
+                return Self::section_error::<E>(section, result, &self.solvers[section % 2].input);
             }
             self.commit_section(section, traj);
             traj.duration += self.section_durations[section];

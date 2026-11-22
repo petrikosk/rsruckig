@@ -304,34 +304,6 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
         }
     }
 
-    /// Copy the single-section trajectory into the fallback slot without
-    /// allocating
-    fn store_fallback(&mut self, traj: &Trajectory<DOF>) {
-        self.fallback_trajectory.duration = traj.duration;
-        self.fallback_trajectory.cumulative_times.clear();
-        self.fallback_trajectory
-            .cumulative_times
-            .extend_from_slice(&traj.cumulative_times);
-        self.fallback_trajectory
-            .independent_min_durations
-            .copy_from_slice(&traj.independent_min_durations);
-        for dof in 0..self.degrees_of_freedom {
-            self.fallback_trajectory.profiles[0][dof] = traj.profiles[0][dof];
-        }
-    }
-
-    fn restore_fallback(&self, traj: &mut Trajectory<DOF>) {
-        traj.duration = self.fallback_trajectory.duration;
-        traj.cumulative_times.clear();
-        traj.cumulative_times
-            .extend_from_slice(&self.fallback_trajectory.cumulative_times);
-        traj.independent_min_durations
-            .copy_from_slice(&self.fallback_trajectory.independent_min_durations);
-        for dof in 0..self.degrees_of_freedom {
-            traj.profiles[0][dof] = self.fallback_trajectory.profiles[0][dof];
-        }
-    }
-
     /// Follow the target signal for one control cycle
     ///
     /// Recalculates the trajectory from `input`'s current state toward the
@@ -379,7 +351,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
         output.new_calculation = false;
         let mut fallback_exhausted = false;
         if result == RuckigResult::Working {
-            self.store_fallback(&output.trajectory);
+            self.fallback_trajectory.copy_from(&output.trajectory);
             self.have_fallback = true;
             // Never sample past the end of the plan. A target that is reachable
             // in less than one cycle (e.g. a moving target the output lags by
@@ -395,7 +367,7 @@ impl<const DOF: usize, E: RuckigErrorHandler> Trackig<DOF, E> {
             }
             // Keep following the last successfully calculated trajectory. Never
             // step past its end: hold the final state instead of extrapolating.
-            self.restore_fallback(&mut output.trajectory);
+            output.trajectory.copy_from(&self.fallback_trajectory);
             let duration = self.fallback_trajectory.get_duration();
             self.time_along_trajectory = (self.time_along_trajectory + self.delta_time).min(duration);
             fallback_exhausted = self.time_along_trajectory >= duration;

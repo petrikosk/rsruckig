@@ -97,7 +97,7 @@ impl<const N: usize> IntoIterator for PositiveSet<N> {
 
     fn into_iter(self) -> Self::IntoIter {
         let mut data = self.0.data;
-        data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        data.sort_unstable_by(f64::total_cmp);
         data.into_iter()
     }
 }
@@ -116,7 +116,7 @@ impl<'a, const N: usize> IntoIterator for &'a mut PositiveSet<N> {
     type IntoIter = core::slice::IterMut<'a, f64>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        self.0.data.sort_unstable_by(f64::total_cmp);
         self.0.data.iter_mut()
     }
 }
@@ -132,33 +132,16 @@ impl<const N: usize> Default for PositiveSet<N> {
 pub fn solve_cub(a: f64, b: f64, c: f64, d: f64) -> PositiveSet<3> {
     let mut roots = PositiveSet::new();
 
-    if d.abs() < f64::EPSILON {
-        // First solution is x = 0
+    // A vanishing constant term has the root x = 0; the remaining roots are
+    // those of the deflated polynomial a*x^2 + b*x + c
+    let (a, b, c, d) = if d.abs() < f64::EPSILON {
         roots.insert(0.0);
+        (0.0, a, b, c)
+    } else {
+        (a, b, c, d)
+    };
 
-        // Converting to a quadratic equation
-        let tmp = d;
-        let _d = c;
-        let c = b;
-        let b = a;
-        let _a = 0.0;
-
-        if b.abs() < f64::EPSILON {
-            // Linear equation
-            if c.abs() > f64::EPSILON {
-                roots.insert(-tmp / c);
-            }
-        } else {
-            // Quadratic equation
-            let discriminant = c * c - 4.0 * b * tmp;
-            if discriminant >= 0.0 {
-                let inv2b = 1.0 / (2.0 * b);
-                let y = discriminant.sqrt();
-                roots.insert((-c + y) * inv2b);
-                roots.insert((-c - y) * inv2b);
-            }
-        }
-    } else if a.abs() < f64::EPSILON {
+    if a.abs() < f64::EPSILON {
         if b.abs() < f64::EPSILON {
             // Linear equation
             if c.abs() > f64::EPSILON {

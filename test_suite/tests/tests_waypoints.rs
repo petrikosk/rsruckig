@@ -179,8 +179,8 @@ fn test_monotone_chain_passes_with_nonzero_velocity() {
     otg.calculate(&input, &mut traj).unwrap();
 
     let boundaries = traj.get_intermediate_durations();
-    for s in 0..2 {
-        let (_, v, _) = sample(&traj, 1, boundaries[s]);
+    for (s, &boundary) in boundaries.iter().enumerate().take(2) {
+        let (_, v, _) = sample(&traj, 1, boundary);
         assert!(
             v[0] > 0.1,
             "monotone chain should pass waypoint {s} with positive velocity, got {}",
@@ -272,8 +272,8 @@ fn test_per_section_limits_respected() {
 
     // The waypoint velocities must respect the tighter neighboring section
     let boundaries = traj.get_intermediate_durations();
-    for s in 0..2 {
-        let (_, v, _) = sample(&traj, 1, boundaries[s]);
+    for (s, &boundary) in boundaries.iter().enumerate().take(2) {
+        let (_, v, _) = sample(&traj, 1, boundary);
         assert!(
             v[0].abs() <= 0.5 * (1.0 + LIMIT_TOL),
             "waypoint {s} velocity {} exceeds the middle section limit 0.5",

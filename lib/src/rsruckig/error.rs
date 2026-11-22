@@ -70,6 +70,14 @@ pub enum RuckigError {
 /// }
 /// ```
 pub trait RuckigErrorHandler {
+    /// Whether this handler discards every error without looking at it.
+    ///
+    /// When `true`, the library skips building the (comparatively expensive)
+    /// error messages and does not call the handler at all. Defaults to
+    /// `false`; only override it for handlers that unconditionally return
+    /// `Ok(())` without using the message.
+    const IGNORES_ERRORS: bool = false;
+
     /// Handle an error during input validation
     ///
     /// # Arguments
@@ -108,10 +116,12 @@ impl RuckigErrorHandler for ThrowErrorHandler {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct IgnoreErrorHandler;
 
 impl RuckigErrorHandler for IgnoreErrorHandler {
+    const IGNORES_ERRORS: bool = true;
+
     fn handle_validation_error(_message: &str) -> Result<(), RuckigError> {
         Ok(())
     }

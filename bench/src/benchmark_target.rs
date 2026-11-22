@@ -1,262 +1,255 @@
-use gnuplot::{AxesCommon, Caption, Color, Figure, Tick};
+//! Benchmark of the trajectory calculation on random state-to-state inputs.
+//!
+//! Prints the calculation durations and writes them as a bar chart to
+//! `rsruckig-benchmark_target.svg` in the current working directory. The chart
+//! is drawn with the pure-Rust `plotters` crate, like the examples.
+
+use plotters::prelude::*;
 use rand_core::SeedableRng;
 use rand_distr::{Distribution, Normal, Uniform};
 use rand_pcg::Pcg64Mcg;
-use rsruckig::error::RuckigErrorHandler;
 use rsruckig::prelude::*;
+use std::error::Error;
 use std::time::Instant;
 
+/// Mean and standard deviation of a measurement over the benchmark runs
+#[derive(Clone, Copy)]
+struct Statistic {
+    mean: f64,
+    std: f64,
+}
+
+impl Statistic {
+    fn of(values: &[f64]) -> Self {
+        let count = values.len() as f64;
+        let mean = values.iter().sum::<f64>() / count;
+        let variance = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / count;
+        Self {
+            mean,
+            std: variance.sqrt(),
+        }
+    }
+}
+
+/// Calculation durations in microseconds
 struct BenchmarkResults {
     degrees_of_freedom: usize,
-    number_of_trajectories: i64,
-    average_mean: f64,
-    average_std: f64,
-    worst_mean: f64,
-    worst_std: f64,
-    global_mean: f64,
-    global_std: f64,
+    number_of_trajectories: usize,
+    /// Average duration of a single calculation
+    average: Statistic,
+    /// Worst duration of a single calculation
+    worst: Statistic,
+    /// Duration per trajectory including the input generation
+    global: Statistic,
 }
 
-struct Randomizer<D>
-where
-    D: Distribution<f64>,
-{
+struct Randomizer<D: Distribution<f64>> {
     rng: Pcg64Mcg,
     distribution: D,
-    uniform_dist: Uniform<f64>,
+    uniform: Uniform<f64>,
 }
 
-impl<D> Randomizer<D>
-where
-    D: Distribution<f64>,
-{
-    pub fn new(distribution: D, local_seed: u64) -> Self {
-        let rng = Pcg64Mcg::seed_from_u64(local_seed);
-        let uniform_dist = Uniform::new(0.0, 1.0);
+impl<D: Distribution<f64>> Randomizer<D> {
+    fn new(distribution: D, seed: u64) -> Self {
         Self {
-            rng,
+            rng: Pcg64Mcg::seed_from_u64(seed),
             distribution,
-            uniform_dist,
+            uniform: Uniform::new(0.0, 1.0),
         }
     }
 
-    pub fn fill(&mut self, input: &mut [f64]) {
-        for val in input.iter_mut() {
-            *val = self.distribution.sample(&mut self.rng);
+    fn fill(&mut self, values: &mut [f64]) {
+        for value in values {
+            *value = self.distribution.sample(&mut self.rng);
         }
     }
 
-    pub fn fill_or_zero(&mut self, input: &mut [f64], p: f64) {
-        for val in input.iter_mut() {
-            if self.uniform_dist.sample(&mut self.rng) < p {
-                *val = self.distribution.sample(&mut self.rng);
+    /// Samples each value with probability `p`, and sets it to zero otherwise
+    fn fill_or_zero(&mut self, values: &mut [f64], p: f64) {
+        for value in values {
+            *value = if self.uniform.sample(&mut self.rng) < p {
+                self.distribution.sample(&mut self.rng)
             } else {
-                *val = 0.0;
-            }
+                0.0
+            };
         }
     }
 
-    pub fn fill_with_offset(&mut self, input: &mut [f64], offset: &[f64]) {
-        for (val, &off) in input.iter_mut().zip(offset.iter()) {
-            *val = self.distribution.sample(&mut self.rng) + off.abs();
-        }
-    }
-
-    pub fn _fill_min_with_offset(&mut self, input: &mut [f64], offset: &[f64]) {
-        for (val, &off) in input.iter_mut().zip(offset.iter()) {
-            *val = self.distribution.sample(&mut self.rng) - off.abs();
+    /// Samples each value above the magnitude of its offset
+    fn fill_with_offset(&mut self, values: &mut [f64], offsets: &[f64]) {
+        for (value, offset) in values.iter_mut().zip(offsets) {
+            *value = self.distribution.sample(&mut self.rng) + offset.abs();
         }
     }
 }
 
-fn _check_update<const DOF: usize, E: RuckigErrorHandler>(
-    otg: &mut Ruckig<DOF, E>,
-    input: &InputParameter<DOF>,
-) -> f64 {
-    let mut output = OutputParameter::new(None);
-    let _result = otg.update(input, &mut output);
-    output.calculation_duration
+fn microseconds_since(start: Instant) -> f64 {
+    start.elapsed().as_nanos() as f64 / 1000.0
 }
 
-fn check_calculation<const DOF: usize, E: RuckigErrorHandler>(
-    otg: &mut Ruckig<DOF, E>,
-    input: &InputParameter<DOF>,
-) -> f64 {
-    let mut traj = Trajectory::new(None);
-    let start = Instant::now();
-    let _result = otg.calculate(input, &mut traj);
-    let stop = Instant::now();
-    stop.duration_since(start).as_nanos() as f64 / 1000.0
-}
-
-fn analyse(v: &[f64]) -> (f64, f64) {
-    let sum: f64 = v.iter().sum();
-    let mean = sum / v.len() as f64;
-
-    // Calculate differences from the mean and collect into a Vec<f64>
-    let diff: Vec<f64> = v.iter().map(|&x| x - mean).collect();
-
-    // Calculate the sum of squares of the differences
-    let sq_sum: f64 = diff.iter().map(|&d| d * d).sum();
-
-    // Calculate the standard deviation
-    let std_deviation = (sq_sum / v.len() as f64).sqrt();
-
-    (mean, std_deviation)
-}
-
-fn benchmark<const DOF: usize>(
-    n: &mut usize,
-    number_of_trajectories: i64,
-    verbose: bool,
-) -> BenchmarkResults {
+fn benchmark<const DOF: usize>(runs: usize, number_of_trajectories: usize) -> BenchmarkResults {
     let mut otg = Ruckig::<DOF, ThrowErrorHandler>::new(None, 0.005);
-
-    let position_dist = Normal::new(0.0, 4.0).unwrap();
-    let dynamic_dist = Normal::new(0.0, 0.8).unwrap();
-    let limit_dist = Uniform::new(0.1, 12.0);
-
-    let mut position_randomizer = Randomizer::new(position_dist, 42);
-    let mut dynamic_randomizer = Randomizer::new(dynamic_dist, 43);
-    let mut limit_randomizer = Randomizer::new(limit_dist, 44);
-
     let mut input = InputParameter::new(None);
+    let mut traj = Trajectory::new(None);
 
-    let mut average: Vec<f64> = Vec::new();
-    let mut worst: Vec<f64> = Vec::new();
-    let mut global: Vec<f64> = Vec::new();
+    let mut position = Randomizer::new(Normal::new(0.0, 4.0).unwrap(), 42);
+    let mut dynamic = Randomizer::new(Normal::new(0.0, 0.8).unwrap(), 43);
+    let mut limit = Randomizer::new(Uniform::new(0.1, 12.0), 44);
 
-    for _ in 0..*n {
-        let mut average_: f64 = 0.0;
-        let mut worst_: f64 = 0.0;
-        let mut n: usize = 1;
+    let mut averages = Vec::with_capacity(runs);
+    let mut worsts = Vec::with_capacity(runs);
+    let mut globals = Vec::with_capacity(runs);
+
+    for _ in 0..runs {
+        let mut total = 0.0;
+        let mut worst: f64 = 0.0;
+        let mut calculations = 0_usize;
 
         let start = Instant::now();
-
         for _ in 0..number_of_trajectories {
-            position_randomizer.fill(&mut input.current_position);
-            dynamic_randomizer.fill_or_zero(&mut input.current_velocity, 0.9);
-            dynamic_randomizer.fill_or_zero(&mut input.current_acceleration, 0.8);
-            position_randomizer.fill(&mut input.target_position);
-            dynamic_randomizer.fill_or_zero(&mut input.target_velocity, 0.7);
-            dynamic_randomizer.fill_or_zero(&mut input.target_acceleration, 0.6);
-
-            limit_randomizer.fill_with_offset(
-                &mut input.max_velocity,
-                &input.target_velocity, // pass a reference to target_velocity
-            );
-            limit_randomizer.fill_with_offset(
-                &mut input.max_acceleration,
-                &input.target_acceleration, // pass a reference to target_acceleration
-            );
-
-            limit_randomizer.fill(&mut input.max_jerk);
+            position.fill(&mut input.current_position);
+            dynamic.fill_or_zero(&mut input.current_velocity, 0.9);
+            dynamic.fill_or_zero(&mut input.current_acceleration, 0.8);
+            position.fill(&mut input.target_position);
+            dynamic.fill_or_zero(&mut input.target_velocity, 0.7);
+            dynamic.fill_or_zero(&mut input.target_acceleration, 0.6);
+            limit.fill_with_offset(&mut input.max_velocity, &input.target_velocity);
+            limit.fill_with_offset(&mut input.max_acceleration, &input.target_acceleration);
+            limit.fill(&mut input.max_jerk);
 
             if otg.validate_input(&input, false, false).is_err() {
                 continue;
             }
 
-            let time = check_calculation(&mut otg, &input);
-            average_ = average_ + (time - average_) / n as f64;
-            worst_ = worst_.max(time);
-            n += 1;
+            let calculation_start = Instant::now();
+            // Failed calculations are part of the measured workload
+            let _ = std::hint::black_box(otg.calculate(&input, &mut traj));
+            let duration = microseconds_since(calculation_start);
+
+            total += duration;
+            worst = worst.max(duration);
+            calculations += 1;
         }
-        let stop = Instant::now();
-        let global_ =
-            stop.duration_since(start).as_nanos() as f64 / 1000.0 / number_of_trajectories as f64;
-
-        average.push(average_);
-        worst.push(worst_);
-        global.push(global_);
+        globals.push(microseconds_since(start) / number_of_trajectories as f64);
+        averages.push(total / calculations.max(1) as f64);
+        worsts.push(worst);
     }
-    let (average_mean, average_std) = analyse(&average);
-    let (worst_mean, worst_std) = analyse(&worst);
-    let (global_mean, global_std) = analyse(&global);
 
-    if verbose {
-        println!("--------------------------------------------------");
-        println!(
-            "Benchmark for {} DoFs on {} trajectories",
-            DOF, number_of_trajectories
-        );
-        println!(
-            "Average calculation duration {:.4} pm {:.4} [µs]",
-            average_mean, average_std
-        );
-        println!(
-            "Worst calculation duration {:.4} pm {:.4} [µs]",
-            worst_mean, worst_std
-        );
-        println!(
-            "End-to-end Calculation Duration {:.4} pm {:.4} [µs]",
-            global_mean, global_std
-        );
-    }
     BenchmarkResults {
         degrees_of_freedom: DOF,
         number_of_trajectories,
-        average_mean,
-        average_std,
-        worst_mean,
-        worst_std,
-        global_mean,
-        global_std,
+        average: Statistic::of(&averages),
+        worst: Statistic::of(&worsts),
+        global: Statistic::of(&globals),
     }
 }
 
-fn plot_benchmark_results(benchmark_results: BenchmarkResults) {
-    let mut fg = Figure::new();
-
-    // Data for the bar chart
-    let metrics = ["Average", "Worst", "Global"];
-    let means = [
-        benchmark_results.average_mean,
-        benchmark_results.worst_mean,
-        benchmark_results.global_mean,
-    ];
-    let std_devs = [
-        benchmark_results.average_std,
-        benchmark_results.worst_std,
-        benchmark_results.global_std,
-    ];
-    let positions: Vec<f64> = (0..metrics.len()).map(|x| x as f64).collect();
-
-    // Creating custom ticks for the x-axis
-    let custom_ticks: Vec<Tick<f64, String>> = positions
-        .iter()
-        .zip(metrics.iter())
-        .map(|(&pos, &label)| Tick::Major(pos, gnuplot::Fix(label.to_string())))
-        .collect();
-
-    fg.axes2d()
-        .set_title(
-            &format!(
-                "Benchmark for {} DoFs on {} trajectories",
-                benchmark_results.degrees_of_freedom, benchmark_results.number_of_trajectories
-            ),
-            &[],
+impl BenchmarkResults {
+    fn title(&self) -> String {
+        format!(
+            "Benchmark for {} DoFs on {} trajectories",
+            self.degrees_of_freedom, self.number_of_trajectories
         )
-        .set_x_label("Metrics", &[])
-        .set_y_label("Duration (µs)", &[])
-        .set_x_ticks_custom(custom_ticks.iter(), &[], &[])
-        .boxes(
-            positions.iter(),
-            means.iter(),
-            &[Caption("Mean"), Color("blue")],
-        )
-        .y_error_lines(
-            positions.iter(),
-            means.iter(),
-            std_devs.iter(),
-            &[Caption("Std Dev"), Color("red")],
-        );
-    fg.show().unwrap();
+    }
+
+    fn metrics(&self) -> [(&'static str, Statistic); 3] {
+        [
+            ("Average", self.average),
+            ("Worst", self.worst),
+            ("End-to-end", self.global),
+        ]
+    }
+
+    fn print(&self) {
+        println!("--------------------------------------------------");
+        println!("{}", self.title());
+        for (name, statistic) in self.metrics() {
+            println!(
+                "{name} calculation duration {:.4} pm {:.4} [µs]",
+                statistic.mean, statistic.std
+            );
+        }
+    }
+
+    /// Draws the mean durations as bars with their standard deviations as
+    /// error bars. The duration axis is logarithmic, as the worst case is
+    /// orders of magnitude above the average.
+    fn plot(&self, path: &str) -> Result<(), Box<dyn Error>> {
+        let metrics = self.metrics();
+        let lowest = metrics
+            .iter()
+            .map(|(_, s)| s.mean)
+            .fold(f64::INFINITY, f64::min);
+        let highest = metrics
+            .iter()
+            .map(|(_, s)| s.mean + s.std)
+            .fold(0.0, f64::max);
+        // Whole decades, so that the axis gets labelled ticks
+        let y_min = 10_f64.powf(lowest.log10().floor());
+        let y_max = 10_f64.powf(highest.log10().ceil());
+
+        let root = SVGBackend::new(path, (960, 640)).into_drawing_area();
+        root.fill(&WHITE)?;
+
+        let mut chart = ChartBuilder::on(&root)
+            .caption(self.title(), ("sans-serif", 25))
+            .margin(20)
+            .x_label_area_size(45)
+            .y_label_area_size(70)
+            .build_cartesian_2d(
+                (0..metrics.len() - 1).into_segmented(),
+                (y_min..y_max).log_scale(),
+            )?;
+
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .y_desc("Duration [µs]")
+            .x_label_formatter(&|segment| match segment {
+                SegmentValue::CenterOf(index) => metrics
+                    .get(*index)
+                    .map_or_else(String::new, |(name, _)| name.to_string()),
+                _ => String::new(),
+            })
+            .draw()?;
+
+        chart.draw_series(metrics.iter().enumerate().map(|(index, (_, statistic))| {
+            let mut bar = Rectangle::new(
+                [
+                    (SegmentValue::Exact(index), y_min),
+                    (SegmentValue::Exact(index + 1), statistic.mean),
+                ],
+                BLUE.mix(0.6).filled(),
+            );
+            bar.set_margin(0, 0, 30, 30);
+            bar
+        }))?;
+
+        chart.draw_series(metrics.iter().enumerate().map(|(index, (_, statistic))| {
+            let center = SegmentValue::CenterOf(index);
+            PathElement::new(
+                [
+                    (center.clone(), (statistic.mean - statistic.std).max(y_min)),
+                    (center, statistic.mean + statistic.std),
+                ],
+                RED.stroke_width(3),
+            )
+        }))?;
+
+        root.present()?;
+        Ok(())
+    }
 }
 
-fn main() {
-    let mut n = 2 * 5;
+fn main() -> Result<(), Box<dyn Error>> {
+    let runs = 10;
     let number_of_trajectories = 4 * 64 * 1024;
 
-    let results = benchmark::<3>(&mut n, number_of_trajectories, true);
-    plot_benchmark_results(results);
+    let results = benchmark::<3>(runs, number_of_trajectories);
+    results.print();
+
+    let path = concat!(env!("CARGO_BIN_NAME"), ".svg");
+    results.plot(path)?;
+    println!("Chart written to {path}");
+    Ok(())
 }

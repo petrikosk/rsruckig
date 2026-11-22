@@ -30,34 +30,34 @@
 /// // Trajectory has reached the target
 /// assert_eq!(output.time >= output.trajectory.get_duration(), true);
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuckigResult {
     /// The trajectory is being calculated normally
     Working = 0,
-    
+
     /// The trajectory has reached its final position
     Finished = 1,
-    
+
     /// Unclassified error in calculation
     Error = -1,
-    
+
     /// Error in the input parameters
     ErrorInvalidInput = -100,
-    
+
     /// The trajectory duration exceeds its numerical limits
     ErrorTrajectoryDuration = -101,
-    
+
     /// The trajectory exceeds the given positional limits
     /// (`InputParameter::min_position` / `max_position`) and no compliant
     /// profile could be found
     ErrorPositionalLimits = -102,
-    
+
     /// The trajectory is not valid due to a conflict with zero limits
     ErrorZeroLimits = -104,
-    
+
     /// Error during the extreme time calculation (Step 1)
     ErrorExecutionTimeCalculation = -110,
-    
+
     /// Error during the synchronization calculation (Step 2)
     ErrorSynchronizationCalculation = -111,
 }

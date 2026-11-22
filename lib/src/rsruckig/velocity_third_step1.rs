@@ -8,6 +8,10 @@ use crate::{
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
+/// The limits `(a_max, a_min, j_max)` of a search direction; the opposite
+/// direction swaps the bounds and negates the jerk
+type DirectedLimits = (f64, f64, f64);
+
 #[derive(Debug)]
 pub struct VelocityThirdOrderStep1 {
     a0: f64,
@@ -179,58 +183,35 @@ impl VelocityThirdOrderStep1 {
         self.valid_profiles[0].set_boundary_from_profile(input);
         self.current_index = 0;
 
+        let up: DirectedLimits = (self._a_max, self._a_min, self._j_max);
+        let down: DirectedLimits = (self._a_min, self._a_max, -self._j_max);
+
         if f64::abs(self.af) < f64::EPSILON {
-            // There is no blocked interval when self.af==0.0, so return after first found profile
-            let a_max = if self.vd >= 0.0 {
-                self._a_max
+            // There is no blocked interval when af==0, so return after first
+            // found profile, searching in the direction of the target first
+            let directions = if self.vd >= 0.0 {
+                [up, down]
             } else {
-                self._a_min
+                [down, up]
             };
-            let a_min = if self.vd >= 0.0 {
-                self._a_min
-            } else {
-                self._a_max
-            };
-            let j_max = if self.vd >= 0.0 {
-                self._j_max
-            } else {
-                -self._j_max
-            };
-
-            self.time_none(a_max, a_min, j_max, true);
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
+            for (a_max, a_min, j_max) in directions {
+                self.time_none(a_max, a_min, j_max, true);
+                if self.current_index > 0 {
+                    break;
+                }
+                self.time_acc0(a_max, a_min, j_max, true);
+                if self.current_index > 0 {
+                    break;
+                }
             }
-            self.time_acc0(a_max, a_min, j_max, true);
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-
-            self.time_none(a_min, a_max, -j_max, true);
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_acc0(a_min, a_max, -j_max, true);
         } else {
-            self.time_none(self._a_max, self._a_min, self._j_max, false);
-            self.time_none(self._a_min, self._a_max, -self._j_max, false);
-            self.time_acc0(self._a_max, self._a_min, self._j_max, false);
-            self.time_acc0(self._a_min, self._a_max, -self._j_max, false);
+            // The order of the valid profiles matters for the block calculation
+            for (a_max, a_min, j_max) in [up, down] {
+                self.time_none(a_max, a_min, j_max, false);
+            }
+            for (a_max, a_min, j_max) in [up, down] {
+                self.time_acc0(a_max, a_min, j_max, false);
+            }
         }
 
         Block::calculate_block(

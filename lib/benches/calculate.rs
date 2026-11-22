@@ -240,11 +240,84 @@ fn bench_corpus(c: &mut Criterion) {
     });
 }
 
+/// Trajectory through four intermediate waypoints (3 DoF): the full
+/// pass-through estimation + local refinement of the waypoint solver.
+fn bench_waypoints(c: &mut Criterion) {
+    let mut otg = Ruckig::<3, IgnoreErrorHandler>::with_waypoints(None, 0.01, 10);
+    let mut input = InputParameter::<3>::with_waypoints(None, 10);
+    let mut traj = Trajectory::<3>::new(None);
+
+    input.current_position = daov_stack![0.2, 0.0, -0.3];
+    input.current_velocity = daov_stack![0.0, 0.2, 0.0];
+    input.current_acceleration = daov_stack![0.0, 0.6, 0.0];
+    input
+        .intermediate_positions
+        .push(daov_stack![1.4, -1.6, 1.0]);
+    input
+        .intermediate_positions
+        .push(daov_stack![-0.6, -0.5, 0.4]);
+    input
+        .intermediate_positions
+        .push(daov_stack![-0.4, -0.35, 0.0]);
+    input
+        .intermediate_positions
+        .push(daov_stack![0.8, 1.8, -0.1]);
+    input.target_position = daov_stack![0.5, 1.2, 0.0];
+    input.max_velocity = daov_stack![3.0, 2.0, 3.0];
+    input.max_acceleration = daov_stack![6.0, 4.0, 4.0];
+    input.max_jerk = daov_stack![16.0, 10.0, 20.0];
+
+    c.bench_function("calculate_waypoints_3dof_4wp", |b| {
+        b.iter(|| {
+            let result = otg.calculate(black_box(&input), &mut traj).unwrap();
+            black_box(result);
+            black_box(traj.get_duration());
+        })
+    });
+}
+
+/// Tracking a moving target (1 DoF): 1000 control cycles of a sinusoid
+/// followed by a step, re-planned every cycle.
+fn bench_tracking(c: &mut Criterion) {
+    let delta_time = 0.001;
+
+    c.bench_function("tracking_1dof_1000_cycles", |b| {
+        b.iter(|| {
+            let mut otg = Trackig::<1, IgnoreErrorHandler>::new(None, delta_time);
+            let mut input = InputParameter::new(None);
+            let mut output = OutputParameter::new(None);
+            input.synchronization = Synchronization::None;
+            input.max_velocity[0] = 3.0;
+            input.max_acceleration[0] = 15.0;
+            input.max_jerk[0] = 150.0;
+            let mut target = TargetState::new(None);
+
+            for i in 0..1000 {
+                let t = i as f64 * delta_time * 8.0;
+                if t < 4.0 {
+                    target.position[0] = (2.0 * t).sin();
+                    target.velocity[0] = 2.0 * (2.0 * t).cos();
+                    target.acceleration[0] = -4.0 * (2.0 * t).sin();
+                } else {
+                    target.position[0] = -1.5;
+                    target.velocity[0] = 0.0;
+                    target.acceleration[0] = 0.0;
+                }
+                let _ = black_box(otg.update(&target, &input, &mut output));
+                output.pass_to_input(&mut input);
+            }
+            black_box(output.new_position[0]);
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_calculate,
     bench_sample_steady_state,
     bench_update_retarget_heap,
-    bench_corpus
+    bench_corpus,
+    bench_waypoints,
+    bench_tracking
 );
 criterion_main!(benches);

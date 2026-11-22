@@ -11,15 +11,15 @@ use core::fmt;
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
-static V_EPS: f64 = 1e-12;
-static A_EPS: f64 = 1e-12;
-static J_EPS: f64 = 1e-12;
+const V_EPS: f64 = 1e-12;
+const A_EPS: f64 = 1e-12;
+const J_EPS: f64 = 1e-12;
 
-static P_PRECISION: f64 = 1e-8;
-static V_PRECISION: f64 = 1e-8;
-static A_PRECISION: f64 = 1e-10;
+const P_PRECISION: f64 = 1e-8;
+const V_PRECISION: f64 = 1e-8;
+const A_PRECISION: f64 = 1e-10;
 
-static T_MAX: f64 = 1e12;
+const T_MAX: f64 = 1e12;
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub enum ReachedLimits {
@@ -117,6 +117,27 @@ pub struct Profile {
     pub control_signs: ControlSigns,
 }
 
+/// Jerk of each of the seven phases for the given control signs: phases with
+/// zero duration carry no jerk, the constant-acceleration and cruise phases
+/// (1, 3, 5) never do.
+#[inline(always)]
+fn jerk_pattern(control_signs: ControlSigns, t: &[f64; 7], jf: f64) -> [f64; 7] {
+    let (j4, j6) = match control_signs {
+        ControlSigns::UDDU => (-jf, jf),
+        ControlSigns::UDUD => (jf, -jf),
+    };
+    let active = |t: f64, j: f64| if t > 0.0 { j } else { 0.0 };
+    [
+        active(t[0], jf),
+        0.0,
+        active(t[2], -jf),
+        0.0,
+        active(t[4], j4),
+        0.0,
+        active(t[6], j6),
+    ]
+}
+
 impl Profile {
     pub fn check_for_velocity(
         &mut self,
@@ -148,27 +169,7 @@ impl Profile {
             return false;
         }
 
-        if control_signs == ControlSigns::UDDU {
-            self.j = [
-                if self.t[0] > 0.0 { jf } else { 0.0 },
-                0.0,
-                if self.t[2] > 0.0 { -jf } else { 0.0 },
-                0.0,
-                if self.t[4] > 0.0 { -jf } else { 0.0 },
-                0.0,
-                if self.t[6] > 0.0 { jf } else { 0.0 },
-            ];
-        } else {
-            self.j = [
-                if self.t[0] > 0.0 { jf } else { 0.0 },
-                0.0,
-                if self.t[2] > 0.0 { -jf } else { 0.0 },
-                0.0,
-                if self.t[4] > 0.0 { jf } else { 0.0 },
-                0.0,
-                if self.t[6] > 0.0 { jf } else { 0.0 },
-            ];
-        }
+        self.j = jerk_pattern(control_signs, &self.t, jf);
 
         for i in 0..7 {
             self.a[i + 1] = self.a[i] + self.t[i] * self.j[i];
@@ -370,27 +371,7 @@ impl Profile {
             return false;
         }
 
-        self.j = if control_signs == ControlSigns::UDDU {
-            [
-                if self.t[0] > 0.0 { jf } else { 0.0 },
-                0.0,
-                if self.t[2] > 0.0 { -jf } else { 0.0 },
-                0.0,
-                if self.t[4] > 0.0 { -jf } else { 0.0 },
-                0.0,
-                if self.t[6] > 0.0 { jf } else { 0.0 },
-            ]
-        } else {
-            [
-                if self.t[0] > 0.0 { jf } else { 0.0 },
-                0.0,
-                if self.t[2] > 0.0 { -jf } else { 0.0 },
-                0.0,
-                if self.t[4] > 0.0 { jf } else { 0.0 },
-                0.0,
-                if self.t[6] > 0.0 { -jf } else { 0.0 },
-            ]
-        };
+        self.j = jerk_pattern(control_signs, &self.t, jf);
 
         self.direction = if v_max > 0.0 {
             Direction::UP
@@ -632,7 +613,7 @@ impl Profile {
         self.limits = limits;
 
         (self.p[7] - self.pf).abs() < P_PRECISION
-            && (self.v[7] - self.vf).abs() < P_PRECISION
+            && (self.v[7] - self.vf).abs() < V_PRECISION
             && self.v[2] <= v_upp_lim
             && self.v[2] >= v_low_lim
             && self.v[3] <= v_upp_lim
@@ -811,6 +792,9 @@ impl Profile {
                 Self::check_position_extremum((-a - d_sqrt) / j, t_sum, t, p, v, a, j, ext);
                 Self::check_position_extremum((-a + d_sqrt) / j, t_sum, t, p, v, a, j, ext);
             }
+        } else if a != 0.0 {
+            // Constant acceleration: the velocity crosses zero at most once
+            Self::check_position_extremum(-v / a, t_sum, t, p, v, a, j, ext);
         }
     }
 
@@ -884,16 +868,19 @@ impl Profile {
                 continue;
             }
 
-            for &t in roots::solve_cub(self.j[i] / 6.0, self.a[i] / 2.0, self.v[i], self.p[i] - pt)
-                .get_data()
-            {
-                let _t = t;
-
-                if 0.0 < _t && _t <= self.t[i] {
-                    let time = offset + _t + if i > 0 { self.t_sum[i - 1] } else { 0.0 };
-                    let (_, vt, at) = integrate(_t, self.p[i], self.v[i], self.a[i], self.j[i]);
-                    return Some((time, vt, at));
-                }
+            // The roots are unordered: the first crossing is the smallest one
+            // inside the phase
+            let first_crossing =
+                roots::solve_cub(self.j[i] / 6.0, self.a[i] / 2.0, self.v[i], self.p[i] - pt)
+                    .get_data()
+                    .iter()
+                    .copied()
+                    .filter(|&t| 0.0 < t && t <= self.t[i])
+                    .min_by(f64::total_cmp);
+            if let Some(t) = first_crossing {
+                let time = offset + t + if i > 0 { self.t_sum[i - 1] } else { 0.0 };
+                let (_, vt, at) = integrate(t, self.p[i], self.v[i], self.a[i], self.j[i]);
+                return Some((time, vt, at));
             }
         }
 

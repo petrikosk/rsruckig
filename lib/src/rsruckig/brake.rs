@@ -148,7 +148,7 @@ impl BrakeProfile {
             let t_to_v_max = -a_max / (2.0 * j_max) - (v_at_a_max - v_max) / a_max;
 
             self.t[0] = t_to_a_max + EPS;
-            self.t[1] = t_to_v_min.min((t_to_v_max - EPS).max(0.0));
+            self.t[1] = t_to_v_min.min(t_to_v_max - EPS).max(0.0);
         } else {
             self.t[0] = t_to_a_max + EPS;
         }
@@ -292,10 +292,10 @@ impl BrakeProfile {
 
         if v0 > v_max {
             self.a[0] = a_min;
-            self.t[0] = (v_max - v0) / a_min + f64::EPSILON;
+            self.t[0] = (v_max - v0) / a_min + EPS;
         } else if v0 < v_min {
             self.a[0] = a_max;
-            self.t[0] = (v_min - v0) / a_max + f64::EPSILON;
+            self.t[0] = (v_min - v0) / a_max + EPS;
         }
     }
 
@@ -311,10 +311,10 @@ impl BrakeProfile {
 
         if a0 > a_max {
             self.j[0] = -j_max;
-            self.t[0] = (a0 - a_max) / j_max + f64::EPSILON;
+            self.t[0] = (a0 - a_max) / j_max + EPS;
         } else if a0 < a_min {
             self.j[0] = j_max;
-            self.t[0] = -(a0 - a_min) / j_max + f64::EPSILON;
+            self.t[0] = -(a0 - a_min) / j_max + EPS;
         }
     }
 

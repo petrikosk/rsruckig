@@ -93,7 +93,7 @@ pub mod prelude {
     pub use super::result::RuckigResult;
     pub use super::ruckig::Ruckig;
     pub use super::trackig::{TargetState, Trackig};
-    pub use super::trajectory::Trajectory;
+    pub use super::trajectory::{KinematicState, Trajectory};
     pub use super::util::DataArrayOrVec;
 
     // Also re-export the macros for convenience

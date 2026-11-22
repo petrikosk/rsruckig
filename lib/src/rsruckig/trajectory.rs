@@ -5,11 +5,28 @@
 
 use crate::profile::Bound;
 use crate::profile::Profile;
+use crate::roots;
 use crate::util::{integrate, DataArrayOrVec};
 
 use crate::alloc::{vec, vec::Vec};
 
-// We'll use Vec<T> instead of CustomVector<T, DOF>
+/// The kinematic state of all degrees of freedom at one time of a
+/// [`Trajectory`], as returned by [`Trajectory::state_at`] and
+/// [`Trajectory::at_times`]
+#[derive(Debug, Clone, PartialEq)]
+pub struct KinematicState<const DOF: usize> {
+    /// The sampled time
+    pub time: f64,
+    pub position: DataArrayOrVec<f64, DOF>,
+    pub velocity: DataArrayOrVec<f64, DOF>,
+    pub acceleration: DataArrayOrVec<f64, DOF>,
+    pub jerk: DataArrayOrVec<f64, DOF>,
+    /// Index of the section the time lies in; the number of sections for
+    /// times past the end of the trajectory
+    pub section: usize,
+}
+
+/// A calculated trajectory: one [`Profile`] per section and degree of freedom
 #[derive(Debug, Clone)]
 pub struct Trajectory<const DOF: usize> {
     /// Profiles per section (one entry per section between waypoints) and DoF
@@ -75,6 +92,16 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
     }
 
+    /// Absolute start time of `section`
+    #[inline]
+    fn section_start(&self, section: usize) -> f64 {
+        if section > 0 {
+            self.cumulative_times[section - 1]
+        } else {
+            0.0
+        }
+    }
+
     #[inline]
     pub fn state_to_integrate_from<F>(
         &self,
@@ -84,50 +111,32 @@ impl<const DOF: usize> Trajectory<DOF> {
     ) where
         F: FnMut(usize, f64, f64, f64, f64, f64),
     {
-        let degrees_of_freedom = self.profiles[0].len();
-
         if time >= self.duration {
+            // Past the end: extrapolate the final state of the last section
+            let last = self.profiles.len() - 1;
             *new_section = self.profiles.len();
-            let profiles_len = self.profiles.len();
-            let profiles_dof = &self.profiles[profiles_len - 1];
-            for dof in 0..degrees_of_freedom {
-                let t_pre = if profiles_len > 1 {
-                    self.cumulative_times[self.cumulative_times.len() - 2]
-                } else {
-                    profiles_dof[dof].brake.duration
-                };
-                let t_diff = time - (t_pre + profiles_dof[dof].t_sum[6]);
-                set_integrate(
-                    dof,
-                    t_diff,
-                    profiles_dof[dof].p[7],
-                    profiles_dof[dof].v[7],
-                    profiles_dof[dof].a[7],
-                    0.0,
-                );
+            let t_section_start = self.section_start(last);
+            for (dof, p) in self.profiles[last].iter().enumerate() {
+                let t_diff = time - (t_section_start + p.brake.duration + p.t_sum[6]);
+                set_integrate(dof, t_diff, p.p[7], p.v[7], p.a[7], 0.0);
             }
             return;
         }
 
-        let mut new_section_index = self.cumulative_times.len();
-        for i in 0..self.cumulative_times.len() {
-            if self.cumulative_times[i] > time {
-                new_section_index = i;
-                break;
-            }
-        }
-        *new_section = new_section_index;
-        let mut t_diff = time;
-        if new_section_index > 0 {
-            t_diff -= self.cumulative_times[new_section_index - 1];
-        }
+        // `time < duration` guarantees a section end after `time`
+        let section = self
+            .cumulative_times
+            .iter()
+            .position(|&end| end > time)
+            .unwrap_or(self.cumulative_times.len() - 1);
+        *new_section = section;
+        let t_diff = time - self.section_start(section);
 
-        for dof in 0..degrees_of_freedom {
-            let p = &self.profiles[*new_section][dof];
+        for (dof, p) in self.profiles[section].iter().enumerate() {
             let mut t_diff_dof = t_diff;
 
             // Brake pre-trajectory
-            if *new_section == 0 && p.brake.duration > 0.0 {
+            if p.brake.duration > 0.0 {
                 if t_diff_dof < p.brake.duration {
                     let index = if t_diff_dof < p.brake.t[0] { 0 } else { 1 };
                     if index > 0 {
@@ -147,24 +156,16 @@ impl<const DOF: usize> Trajectory<DOF> {
                 }
             }
             if t_diff_dof >= p.t_sum[6] {
-                set_integrate(
-                    dof,
-                    t_diff_dof - p.t_sum[6],
-                    p.p[7],
-                    p.v[7],
-                    p.a[7],
-                    0.0,
-                );
+                set_integrate(dof, t_diff_dof - p.t_sum[6], p.p[7], p.v[7], p.a[7], 0.0);
                 continue;
             }
 
-            let mut index_dof = 6; // t_sum has 7 elements, default to last
-            for i in 0..7 {
-                if p.t_sum[i] > t_diff_dof {
-                    index_dof = i;
-                    break;
-                }
-            }
+            // `t_diff_dof < t_sum[6]` guarantees a phase end after it
+            let index_dof = p
+                .t_sum
+                .iter()
+                .position(|&end| end > t_diff_dof)
+                .unwrap_or(6);
 
             if index_dof > 0 {
                 t_diff_dof -= p.t_sum[index_dof - 1];
@@ -215,6 +216,102 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
     }
 
+    /// The kinematic state at the given time.
+    ///
+    /// Returns the state by value, which allocates for a runtime number of
+    /// DoFs (`DOF == 0`); use [`Trajectory::at_time`] to sample into existing
+    /// storage in a control loop.
+    ///
+    /// ```
+    /// use rsruckig::prelude::*;
+    ///
+    /// let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+    /// let mut input = InputParameter::new(None);
+    /// input.target_position = daov_stack![1.0];
+    /// input.max_velocity = daov_stack![1.0];
+    /// input.max_acceleration = daov_stack![1.0];
+    /// input.max_jerk = daov_stack![1.0];
+    ///
+    /// let mut trajectory = Trajectory::new(None);
+    /// otg.calculate(&input, &mut trajectory).unwrap();
+    ///
+    /// let end = trajectory.state_at(trajectory.get_duration());
+    /// assert!((end.position[0] - 1.0).abs() < 1e-9);
+    /// ```
+    pub fn state_at(&self, time: f64) -> KinematicState<DOF> {
+        let dofs = (DOF == 0).then_some(self.degrees_of_freedom);
+        let mut state = KinematicState {
+            time,
+            position: DataArrayOrVec::new(dofs, 0.0),
+            velocity: DataArrayOrVec::new(dofs, 0.0),
+            acceleration: DataArrayOrVec::new(dofs, 0.0),
+            jerk: DataArrayOrVec::new(dofs, 0.0),
+            section: 0,
+        };
+        self.state_to_integrate_from(time, &mut state.section, |dof, t, p, v, a, j| {
+            (
+                state.position[dof],
+                state.velocity[dof],
+                state.acceleration[dof],
+            ) = integrate(t, p, v, a, j);
+            state.jerk[dof] = j;
+        });
+        state
+    }
+
+    /// The kinematic states at several times, sampled lazily.
+    ///
+    /// The times may be given in any order, by value or by reference.
+    ///
+    /// ```
+    /// use rsruckig::prelude::*;
+    ///
+    /// let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+    /// let mut input = InputParameter::new(None);
+    /// input.target_position = daov_stack![1.0];
+    /// input.max_velocity = daov_stack![1.0];
+    /// input.max_acceleration = daov_stack![1.0];
+    /// input.max_jerk = daov_stack![1.0];
+    ///
+    /// let mut trajectory = Trajectory::new(None);
+    /// otg.calculate(&input, &mut trajectory).unwrap();
+    ///
+    /// let duration = trajectory.get_duration();
+    /// let times = (0..=10).map(|i| duration * f64::from(i) / 10.0);
+    /// let positions: Vec<f64> = trajectory
+    ///     .at_times(times)
+    ///     .map(|state| state.position[0])
+    ///     .collect();
+    /// assert!(positions.windows(2).all(|pair| pair[0] <= pair[1]));
+    ///
+    /// // Times by reference
+    /// let states: Vec<_> = trajectory.at_times(&[0.0, duration]).collect();
+    /// assert_eq!(states[0].position[0], 0.0);
+    /// ```
+    pub fn at_times<'a, I>(&'a self, times: I) -> impl Iterator<Item = KinematicState<DOF>> + 'a
+    where
+        I: IntoIterator,
+        I::Item: core::borrow::Borrow<f64>,
+        I::IntoIter: 'a,
+    {
+        times
+            .into_iter()
+            .map(move |time| self.state_at(*core::borrow::Borrow::borrow(&time)))
+    }
+
+    /// Copies `other` into this trajectory, reusing the existing storage
+    pub(crate) fn copy_from(&mut self, other: &Self) {
+        self.resize_sections(other.profiles.len());
+        for (profiles, other_profiles) in self.profiles.iter_mut().zip(&other.profiles) {
+            profiles.copy_from(other_profiles);
+        }
+        self.duration = other.duration;
+        self.cumulative_times.copy_from_slice(&other.cumulative_times);
+        self.independent_min_durations
+            .copy_from(&other.independent_min_durations);
+        self.position_extrema.copy_from(&other.position_extrema);
+    }
+
     #[inline]
     pub fn get_profiles(&self) -> &Vec<DataArrayOrVec<Profile, { DOF }>> {
         &self.profiles
@@ -243,15 +340,17 @@ impl<const DOF: usize> Trajectory<DOF> {
         }
 
         for i in 1..self.profiles.len() {
+            // Profile times are section-local; offset by the section start
+            let t_offset = self.section_start(i);
             for dof in 0..self.degrees_of_freedom {
                 let section_position_extrema = self.profiles[i][dof].get_position_extrema();
                 if section_position_extrema.max > self.position_extrema[dof].max {
                     self.position_extrema[dof].max = section_position_extrema.max;
-                    self.position_extrema[dof].t_max = section_position_extrema.t_max;
+                    self.position_extrema[dof].t_max = section_position_extrema.t_max + t_offset;
                 }
                 if section_position_extrema.min < self.position_extrema[dof].min {
                     self.position_extrema[dof].min = section_position_extrema.min;
-                    self.position_extrema[dof].t_min = section_position_extrema.t_min;
+                    self.position_extrema[dof].t_min = section_position_extrema.t_min + t_offset;
                 }
             }
         }
@@ -264,15 +363,41 @@ impl<const DOF: usize> Trajectory<DOF> {
             return None;
         }
 
-        for (section, p) in self.profiles.iter().enumerate() {
-            if let Some((returned_time, _, _)) = p[dof].get_first_state_at_position(position, 0.0) {
-                // Profile times are section-local; offset by the section start
-                let t_offset = if section > 0 {
-                    self.cumulative_times[section - 1]
-                } else {
-                    0.0
-                };
-                return Some(returned_time + t_offset);
+        for (section, profiles) in self.profiles.iter().enumerate() {
+            let p = &profiles[dof];
+            // Profile times are section-local; offset by the section start
+            let t_offset = self.section_start(section);
+
+            // Brake pre-trajectory (not part of the profile's own phases)
+            if p.brake.duration > 0.0 {
+                let mut t_phase_start = 0.0;
+                for phase in 0..2 {
+                    let t_phase = p.brake.t[phase];
+                    if t_phase <= 0.0 {
+                        continue;
+                    }
+                    let first_crossing = roots::solve_cub(
+                        p.brake.j[phase] / 6.0,
+                        p.brake.a[phase] / 2.0,
+                        p.brake.v[phase],
+                        p.brake.p[phase] - position,
+                    )
+                    .get_data()
+                    .iter()
+                    .copied()
+                    .filter(|&t| (0.0..=t_phase).contains(&t))
+                    .min_by(f64::total_cmp);
+                    if let Some(t) = first_crossing {
+                        return Some(t_offset + t_phase_start + t);
+                    }
+                    t_phase_start += t_phase;
+                }
+            }
+
+            if let Some((time, _, _)) =
+                p.get_first_state_at_position(position, t_offset + p.brake.duration)
+            {
+                return Some(time);
             }
         }
         None

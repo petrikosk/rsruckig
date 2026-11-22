@@ -26,6 +26,20 @@ pub fn remove_profile(
 }
 
 impl Block {
+    /// The extremal profile of step 1 (fastest, or the right end of a blocked
+    /// interval) whose duration is within `tolerance` of `t`, if any
+    #[inline]
+    pub fn extremal_profile_at(&self, t: f64, tolerance: f64) -> Option<&Profile> {
+        if (t - self.t_min).abs() < tolerance {
+            return Some(&self.p_min);
+        }
+        [&self.a, &self.b]
+            .into_iter()
+            .flatten()
+            .find(|interval| (t - interval.right).abs() < tolerance)
+            .map(|interval| &interval.profile)
+    }
+
     #[inline]
     pub fn set_min_profile(&mut self, profile: &Profile) {
         self.p_min = *profile;
@@ -169,6 +183,29 @@ impl Block {
         }
 
         false
+    }
+
+    /// Marks the feasible range around the duration `t` as blocked up to the
+    /// next extremal profile, keeping the extremal durations themselves.
+    ///
+    /// Used when step 2 finds no profile for a duration the block considers
+    /// feasible: a boundary state exactly on a switching curve collapses a
+    /// feasible range to the single duration of its extremal profile, which
+    /// step 1 cannot tell apart from a regular range. Returns `false` if no
+    /// extremal profile with a longer duration exists.
+    pub fn block_until_next_extremal(&mut self, t: f64) -> bool {
+        let t_min = self.t_min;
+        match (&mut self.a, &mut self.b) {
+            (Some(a), _) if t <= a.left => {
+                a.left = t_min;
+                true
+            }
+            (Some(a), Some(b)) if t >= a.right && t <= b.left => {
+                b.left = a.right;
+                true
+            }
+            _ => false,
+        }
     }
 
     #[inline]

@@ -6,6 +6,17 @@ use crate::roots;
 #[cfg(not(feature = "std"))]
 use num_traits::Float;
 
+/// Coefficients of the step 1 polynomials below this value count as possibly
+/// negative when ruling out positive roots
+const ROOT_FILTER_TOLERANCE: f64 = 1e-9;
+
+/// The limits `(v_max, v_min, a_max, a_min, j_max)` of a search direction; the
+/// opposite direction swaps the bounds and negates the jerk
+type DirectedLimits = (f64, f64, f64, f64, f64);
+
+/// A fallback timing calculation for the limits of a search direction
+type TwoStepTiming = fn(&mut PositionThirdOrderStep1, f64, f64, f64, f64, f64);
+
 #[derive(Debug, Default, Clone)]
 pub struct PositionThirdOrderStep1 {
     v0: f64,
@@ -451,33 +462,39 @@ impl PositionThirdOrderStep1 {
         polynom_acc1[2] = 2.0 * (self.a0 - a_min) * h2_acc1 / (j_max_j_max * j_max);
         polynom_acc1[3] = h0_acc1 / (self.j_max_j_max * self.j_max_j_max);
 
-        let mut polynom_acc0_min = polynom_acc0;
-        polynom_acc0_min[0] += 4.0 * t_min_acc0;
-        polynom_acc0_min[1] += (3.0 * polynom_acc0[0] + 6.0 * t_min_acc0) * t_min_acc0;
-        polynom_acc0_min[2] += (2.0 * polynom_acc0[1]
-            + (3.0 * polynom_acc0[0] + 4.0 * t_min_acc0) * t_min_acc0)
-            * t_min_acc0;
-        polynom_acc0_min[3] += (polynom_acc0[2]
-            + (polynom_acc0[1] + (polynom_acc0[0] + t_min_acc0) * t_min_acc0) * t_min_acc0)
-            * t_min_acc0;
+        // A monic quartic without negative coefficients has no positive
+        // root (Descartes' rule of signs), which saves solving it. The
+        // tolerance keeps the roots of degenerate inputs, e.g. states sampled
+        // from a previous trajectory, whose vanishing coefficients may have
+        // either sign by rounding; upstream Ruckig dropped its exact variant
+        // of this filter for rejecting such solutions (3477cf8). Coefficients
+        // that are exactly zero are not rounded, as for a state at rest. A
+        // vanishing constant term stands for a root at zero.
+        let may_have_positive_root = |polynom: &[f64; 4]| {
+            let [leading @ .., constant] = polynom;
+            *constant < ROOT_FILTER_TOLERANCE
+                || leading
+                    .iter()
+                    .any(|&c| c < ROOT_FILTER_TOLERANCE && c != 0.0)
+        };
 
-        // const bool polynom_none_has_solution = (polynom_none_min[0] < 0.0) || (polynom_none_min[1] < 0.0) || (polynom_none_min[2] < 0.0) || (polynom_none_min[3] <= 0.0);
-        let polynom_acc0_has_solution = (polynom_acc0_min[0] < 0.0)
-            || (polynom_acc0_min[1] < 0.0)
-            || (polynom_acc0_min[2] < 0.0)
-            || (polynom_acc0_min[3] <= 0.0);
-        let polynom_acc1_has_solution = (polynom_acc1[0] < 0.0)
-            || (polynom_acc1[1] < 0.0)
-            || (polynom_acc1[2] < 0.0)
-            || (polynom_acc1[3] <= 0.0);
+        // The polynomial of the roots above t_min_acc0 (Taylor shift)
+        let t = t_min_acc0;
+        let [c0, c1, c2, c3] = polynom_acc0;
+        let polynom_acc0_min = [
+            c0 + 4.0 * t,
+            c1 + (3.0 * c0 + 6.0 * t) * t,
+            c2 + (2.0 * c1 + (3.0 * c0 + 4.0 * t) * t) * t,
+            c3 + (c2 + (c1 + (c0 + t) * t) * t) * t,
+        ];
 
         let roots_none = roots::solve_quart_monic_arr(&polynom_none);
-        let roots_acc0 = if polynom_acc0_has_solution {
+        let roots_acc0 = if may_have_positive_root(&polynom_acc0_min) {
             roots::solve_quart_monic_arr(&polynom_acc0)
         } else {
             roots::PositiveSet::new()
         };
-        let roots_acc1 = if polynom_acc1_has_solution {
+        let roots_acc1 = if may_have_positive_root(&polynom_acc1) {
             roots::solve_quart_monic_arr(&polynom_acc1)
         } else {
             roots::PositiveSet::new()
@@ -1056,252 +1073,86 @@ impl PositionThirdOrderStep1 {
         self.valid_profiles[0].set_boundary_from_profile(input);
         self.current_index = 0;
 
-        if f64::abs(self.vf) < f64::EPSILON && f64::abs(self.af) < f64::EPSILON {
-            let v_max = if self.pd >= 0.0 {
-                self._v_max
-            } else {
-                self._v_min
-            };
-            let v_min = if self.pd >= 0.0 {
-                self._v_min
-            } else {
-                self._v_max
-            };
-            let a_max = if self.pd >= 0.0 {
-                self._a_max
-            } else {
-                self._a_min
-            };
-            let a_min = if self.pd >= 0.0 {
-                self._a_min
-            } else {
-                self._a_max
-            };
-            let j_max = if self.pd >= 0.0 {
-                self._j_max
-            } else {
-                -self._j_max
-            };
+        let up: DirectedLimits = (
+            self._v_max,
+            self._v_min,
+            self._a_max,
+            self._a_min,
+            self._j_max,
+        );
+        let down: DirectedLimits = (
+            self._v_min,
+            self._v_max,
+            self._a_min,
+            self._a_max,
+            -self._j_max,
+        );
 
-            if f64::abs(self.v0) < f64::EPSILON
-                && f64::abs(self.a0) < f64::EPSILON
-                && f64::abs(self.pd) < f64::EPSILON
-            {
-                self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+        // Left as soon as the valid profiles are complete
+        'search: {
+            if f64::abs(self.vf) < f64::EPSILON && f64::abs(self.af) < f64::EPSILON {
+                // Search in the direction of the target first
+                let directions = if self.pd >= 0.0 {
+                    [up, down]
+                } else {
+                    [down, up]
+                };
+
+                if f64::abs(self.v0) < f64::EPSILON
+                    && f64::abs(self.a0) < f64::EPSILON
+                    && f64::abs(self.pd) < f64::EPSILON
+                {
+                    let (v_max, v_min, a_max, a_min, j_max) = directions[0];
+                    self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+                } else {
+                    // There is no blocked interval when vf==0 && af==0, so return after first found profile
+                    for (v_max, v_min, a_max, a_min, j_max) in directions {
+                        self.time_all_vel(v_max, v_min, a_max, a_min, j_max, true);
+                        if self.current_index > 0 {
+                            break 'search;
+                        }
+                        self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+                        if self.current_index > 0 {
+                            break 'search;
+                        }
+                        self.time_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+                        if self.current_index > 0 {
+                            break 'search;
+                        }
+                    }
+                }
             } else {
-                // There is no blocked interval when vf==0 && af==0, so return after first found profile
-                self.time_all_vel(v_max, v_min, a_max, a_min, j_max, true);
-                if self.current_index > 0 {
-                    return Block::calculate_block(
-                        block,
-                        &mut self.valid_profiles,
-                        &mut self.current_index,
-                        None,
-                    );
+                // The order of the valid profiles matters for the block calculation
+                for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                    self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, false);
                 }
-                self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
-                if self.current_index > 0 {
-                    return Block::calculate_block(
-                        block,
-                        &mut self.valid_profiles,
-                        &mut self.current_index,
-                        None,
-                    );
+                for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                    self.time_acc0_acc1(v_max, v_min, a_max, a_min, j_max, false);
                 }
-                self.time_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
-                if self.current_index > 0 {
-                    return Block::calculate_block(
-                        block,
-                        &mut self.valid_profiles,
-                        &mut self.current_index,
-                        None,
-                    );
+                for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                    self.time_all_vel(v_max, v_min, a_max, a_min, j_max, false);
                 }
+            }
 
-                self.time_all_vel(v_min, v_max, a_min, a_max, -j_max, true);
-                if self.current_index > 0 {
-                    return Block::calculate_block(
-                        block,
-                        &mut self.valid_profiles,
-                        &mut self.current_index,
-                        None,
-                    );
-                }
-                self.time_all_none_acc0_acc1(v_min, v_max, a_min, a_max, -j_max, true);
-                if self.current_index > 0 {
-                    return Block::calculate_block(
-                        block,
-                        &mut self.valid_profiles,
-                        &mut self.current_index,
-                        None,
-                    );
-                }
-                self.time_acc0_acc1(v_min, v_max, a_min, a_max, -j_max, true);
-            };
-        } else {
-            self.time_all_none_acc0_acc1(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-                false,
-            );
-            self.time_all_none_acc0_acc1(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-                false,
-            );
-            self.time_acc0_acc1(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-                false,
-            );
-            self.time_acc0_acc1(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-                false,
-            );
-            self.time_all_vel(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-                false,
-            );
-            self.time_all_vel(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-                false,
-            );
-        }
+            if self.current_index > 0 {
+                break 'search;
+            }
 
-        if self.current_index == 0 {
-            self.time_none_two_step(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
+            // Fallback for numerically degenerate inputs
+            let two_step_timings: [TwoStepTiming; 4] = [
+                Self::time_none_two_step,
+                Self::time_acc0_two_step,
+                Self::time_vel_two_step,
+                Self::time_acc1_vel_two_step,
+            ];
+            for timing in two_step_timings {
+                for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                    timing(self, v_max, v_min, a_max, a_min, j_max);
+                    if self.current_index > 0 {
+                        break 'search;
+                    }
+                }
             }
-            self.time_none_two_step(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_acc0_two_step(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_acc0_two_step(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_vel_two_step(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_vel_two_step(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_acc1_vel_two_step(
-                self._v_max,
-                self._v_min,
-                self._a_max,
-                self._a_min,
-                self._j_max,
-            );
-            if self.current_index > 0 {
-                return Block::calculate_block(
-                    block,
-                    &mut self.valid_profiles,
-                    &mut self.current_index,
-                    None,
-                );
-            }
-            self.time_acc1_vel_two_step(
-                self._v_min,
-                self._v_max,
-                self._a_min,
-                self._a_max,
-                -self._j_max,
-            );
         }
 
         Block::calculate_block(

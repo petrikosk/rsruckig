@@ -465,8 +465,23 @@ independent_min_durations: DataArrayOrVec<f64, DOF>; // Time-optimal profile for
         new_jerk: &mut Option<&mut DataArrayOrVec<f64, DOF>>,
         new_section: &mut Option<usize>,
     ); // Get the kinematic state of the trajectory at a given time
+<...> pub fn state_at(&self, time: f64) -> KinematicState<DOF>; // The kinematic state at a given time, by value
+<...> pub fn at_times(&self, times) -> impl Iterator<Item = KinematicState<DOF>>; // Lazily sample several times
 <...> get_position_extrema(); // Returns information about the position extrema and their times
 ```
+
+`state_at` and `at_times` are the convenient way to sample a trajectory offline, e.g. for plotting:
+
+```rust
+let duration = trajectory.get_duration();
+let positions: Vec<f64> = trajectory
+    .at_times((0..=100).map(|i| duration * f64::from(i) / 100.0))
+    .map(|state| state.position[0])
+    .collect();
+```
+
+A `KinematicState` holds the `time`, `position`, `velocity`, `acceleration`, `jerk` and `section`. With a runtime
+number of DoFs every state allocates, so prefer `at_time` (which writes into existing storage) inside a control loop.
 
 Again, we refer to the [API documentation](https://docs.ruckig.com) for the exact signatures. (C++ version only)
 
@@ -630,7 +645,10 @@ The tracking interface (`Trackig`) does not support intermediate waypoints. See
 The upstream C++ test suite validates over 5.000.000.000 random trajectories as well as many additional edge cases;
 this port ships its own test suite with known-trajectory tables, seeded random fuzzing (including position limits for
 1st/2nd/3rd-order profiles), tracking scenarios (sinusoid, step, unreachable ramp), regression tests for degenerate
-boundary states, and an allocation-count check for the tracking control cycle. The
+boundary states, and an allocation-count check for the tracking control cycle. `tests_random.rs` ports the random
+trajectory tests of upstream (the number of trajectories is set with `RSRUCKIG_RANDOM_TRAJECTORIES`), and
+`test_suite/oracle/oracle.cpp` compares the results of these tests bit by bit with upstream Ruckig: on several million
+random inputs the result codes are identical and the durations agree to within `1e-13`. The
 numerical exactness is tested for the final position and final velocity to be within `1e-8`, for the final acceleration
 to be within `1e-10`, and for the velocity, acceleration and jerk limit to be within of a numerical error of `1e-12`.
 These are absolute values - we suggest to scale your input so that these correspond to your required precision of the
@@ -647,6 +665,22 @@ against following versions
 
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
+
+### Changes in 3.1.0
+
+- New: `Trajectory::state_at` and `Trajectory::at_times` return the kinematic state as a `KinematicState` value;
+  `RuckigResult` is `Clone + Copy + Eq`; `RuckigErrorHandler` has the associated constant `IGNORES_ERRORS`.
+- A failure of the time synchronization (step 2) now returns `ErrorSynchronizationCalculation` like upstream
+  (it returned `ErrorExecutionTimeCalculation`).
+- Fixed: states beyond the velocity or acceleration limits could fail in step 1 (wrong epsilon of the brake
+  profiles); `solve_cub` with a vanishing constant term; the jerk signs of `UDUD` profiles in the velocity interface;
+  position extrema inside phases of constant acceleration; the times of position extrema and
+  `get_first_time_at_position` with intermediate waypoints or a brake profile.
+- More robust synchronization for degenerate inputs such as states sampled from a previous trajectory: durations
+  that step 2 cannot realize are blocked and the synchronization is repeated, and near-vanishing polynomial
+  coefficients no longer hide solutions in step 1.
+- The calculation with intermediate waypoints is about 44 % faster (identical results), sampling about 8 %.
+- The benchmark (`bench`) draws its chart with `plotters`; gnuplot is no longer needed anywhere.
 
 ### Fixes in 3.0.1
 
