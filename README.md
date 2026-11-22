@@ -666,6 +666,27 @@ against following versions
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
 
+### Fixes in 3.1.2
+
+More calculations of the position interface that failed with `error in step 1` for valid inputs. Like the fixes of
+3.1.1, they are fallbacks that only run when no profile was found, so the results of all other inputs are unchanged.
+
+- A profile that just touches one or both acceleration limits, e.g. a move from rest to rest over exactly
+  `2 a^3 / j_max^2` for the lower limit `a` of acceleration and deceleration (upstream Ruckig fails as well). The
+  profile without a phase of constant acceleration was rejected for a peak beyond the limit by rounding, the one
+  with such a phase because it was shorter than the machine epsilon.
+- Acceleration limits of some thousands, whose resolution is coarser than the absolute tolerance (1e-12) of the
+  profile check: profiles that reach such a limit by construction were rejected for the rounding of their
+  integration, e.g. moves from rest with `min_acceleration = -4000`, or re-planning from a state of a running
+  profile (upstream Ruckig sets the acceleration to the limit for some of these profiles and fails for the others).
+- Re-planning from a state at a border between two profile types: a target at the position of the fastest stop
+  (a vanishing last phase, where the duration is a double root), and a state at the velocity limit after the brake
+  profile (the square root of a term that is negative by rounding).
+
+The fallback repeats the search with a check that sets the accelerations to the limits a profile reaches by
+construction, accepts vanishing phases of constant acceleration, and uses tolerances not below the resolution of
+the limits. The final state is checked as before.
+
 ### Fixes in 3.1.1
 
 Three calculations failed with `error in step 1` for valid inputs (upstream Ruckig fails for them as well). All

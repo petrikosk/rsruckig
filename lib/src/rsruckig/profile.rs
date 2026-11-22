@@ -143,6 +143,32 @@ pub struct Profile {
     pub control_signs: ControlSigns,
 }
 
+/// The acceleration limits that a profile reaches by the construction of its
+/// durations, for [`Profile::check_robust`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ConstructedLimits {
+    /// The first phase ends at the upper acceleration limit (`a[1] == a_max`).
+    pub acc0: bool,
+    /// The third phase ends at the lower acceleration limit (`a[3] == a_min`),
+    /// for profiles without a cruise phase.
+    pub acc1_peak: bool,
+    /// The fifth phase ends at the lower acceleration limit (`a[5] == a_min`).
+    pub acc1: bool,
+}
+
+impl ConstructedLimits {
+    /// No limit is reached by construction.
+    pub const NONE: Self = Self { acc0: false, acc1_peak: false, acc1: false };
+    /// `a[1] == a_max`
+    pub const ACC0: Self = Self { acc0: true, acc1_peak: false, acc1: false };
+    /// `a[3] == a_min`
+    pub const ACC1_PEAK: Self = Self { acc0: false, acc1_peak: true, acc1: false };
+    /// `a[5] == a_min`
+    pub const ACC1: Self = Self { acc0: false, acc1_peak: false, acc1: true };
+    /// `a[1] == a_max` and `a[5] == a_min`
+    pub const ACC0_ACC1: Self = Self { acc0: true, acc1_peak: false, acc1: true };
+}
+
 /// Jerk of each of the seven phases for the given control signs: phases with
 /// zero duration carry no jerk, the constant-acceleration and cruise phases
 /// (1, 3, 5) never do.
@@ -425,6 +451,75 @@ impl Profile {
         a_max: f64,
         a_min: f64,
     ) -> bool {
+        self.check_impl(control_signs, limits, set_limits, None, jf, v_max, v_min, a_max, a_min)
+    }
+
+    /// [`check`](Self::check) for numerically degenerate profiles, used when
+    /// the regular check has rejected all candidates of step 1.
+    ///
+    /// The regular check integrates the profile and compares the result with
+    /// the limits within absolute tolerances of 1e-12. Rounding exceeds these
+    /// for accelerations (or velocities) of some thousands, whose resolution
+    /// is of that order, and it rejects profiles at the border between two
+    /// profile types. This check therefore
+    /// - snaps the accelerations to the limits that the profile reaches by
+    ///   construction, as given by `constructed`,
+    /// - accepts phases of constant acceleration with a vanishing duration
+    ///   and takes durations that are negative by rounding for zero, and
+    /// - uses tolerances not below the resolution of the limits.
+    ///
+    /// The final state is checked like in the regular check.
+    #[allow(clippy::too_many_arguments)]
+    #[inline]
+    pub fn check_robust(
+        &mut self,
+        control_signs: ControlSigns,
+        limits: ReachedLimits,
+        constructed: ConstructedLimits,
+        jf: f64,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+    ) -> bool {
+        self.check_impl(
+            control_signs,
+            limits,
+            false,
+            Some(constructed),
+            jf,
+            v_max,
+            v_min,
+            a_max,
+            a_min,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn check_impl(
+        &mut self,
+        control_signs: ControlSigns,
+        limits: ReachedLimits,
+        set_limits: bool,
+        robust: Option<ConstructedLimits>,
+        jf: f64,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+    ) -> bool {
+        if robust.is_some() {
+            // Durations that are negative by rounding
+            let magnitude: f64 = self.t.iter().map(|t| t.abs()).sum();
+            let tolerance = 8.0 * f64::EPSILON * f64::max(1.0, magnitude);
+            for t in self.t.iter_mut() {
+                if *t < 0.0 && *t > -tolerance {
+                    *t = 0.0;
+                }
+            }
+        }
+
         if self.t[0] < 0.0 {
             return false;
         }
@@ -448,13 +543,15 @@ impl Profile {
             return false;
         }
 
-        if matches!(limits, ReachedLimits::Acc0 | ReachedLimits::Acc0Acc1)
+        if robust.is_none()
+            && matches!(limits, ReachedLimits::Acc0 | ReachedLimits::Acc0Acc1)
             && self.t[1] < f64::EPSILON
         {
             return false;
         }
 
-        if matches!(limits, ReachedLimits::Acc1 | ReachedLimits::Acc0Acc1)
+        if robust.is_none()
+            && matches!(limits, ReachedLimits::Acc1 | ReachedLimits::Acc0Acc1)
             && self.t[5] < f64::EPSILON
         {
             return false;
@@ -466,22 +563,29 @@ impl Profile {
 
         self.j = jerk_pattern(control_signs, &self.t, jf);
 
+        // The absolute tolerances are below the resolution of limits beyond
+        // some thousands
+        let tolerance = |limit: f64, eps: f64| {
+            if robust.is_some() {
+                f64::max(eps, 16.0 * f64::EPSILON * limit.abs())
+            } else {
+                eps
+            }
+        };
+
         self.direction = if v_max > 0.0 {
             Direction::UP
         } else {
             Direction::DOWN
         };
 
-        let v_upp_lim = if self.direction == Direction::UP {
-            v_max
+        let (v_upp, v_low) = if self.direction == Direction::UP {
+            (v_max, v_min)
         } else {
-            v_min
-        } + V_EPS;
-        let v_low_lim = if self.direction == Direction::UP {
-            v_min
-        } else {
-            v_max
-        } - V_EPS;
+            (v_min, v_max)
+        };
+        let v_upp_lim = v_upp + tolerance(v_upp, V_EPS);
+        let v_low_lim = v_low - tolerance(v_low, V_EPS);
 
         for i in 0..7 {
             self.a[i + 1] = self.a[i] + self.t[i] * self.j[i];
@@ -500,6 +604,15 @@ impl Profile {
             ) && i == 2
             {
                 self.a[3] = 0.0;
+            }
+
+            if let Some(constructed) = robust {
+                if (i == 0 && constructed.acc0) || (i == 4 && constructed.acc1) {
+                    self.a[i + 1] = if i == 0 { a_max } else { a_min };
+                }
+                if i == 2 && constructed.acc1_peak {
+                    self.a[3] = a_min;
+                }
             }
 
             if set_limits {
@@ -530,16 +643,13 @@ impl Profile {
         self.control_signs = control_signs;
         self.limits = limits;
 
-        let a_upp_lim = if self.direction == Direction::UP {
-            a_max
+        let (a_upp, a_low) = if self.direction == Direction::UP {
+            (a_max, a_min)
         } else {
-            a_min
-        } + A_EPS;
-        let a_low_lim = if self.direction == Direction::UP {
-            a_min
-        } else {
-            a_max
-        } - A_EPS;
+            (a_min, a_max)
+        };
+        let a_upp_lim = a_upp + tolerance(a_upp, A_EPS);
+        let a_low_lim = a_low - tolerance(a_low, A_EPS);
 
         (self.p[7] - self.pf).abs() < P_PRECISION
             && (self.v[7] - self.vf).abs() < V_PRECISION

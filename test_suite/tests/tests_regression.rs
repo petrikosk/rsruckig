@@ -401,3 +401,127 @@ fn test_velocity_at_asymmetric_acceleration_limit() {
         assert!(j.abs() <= input.max_jerk[0] * (1.0 + 1e-12), "jerk {j}");
     }
 }
+
+/// Moves from rest to rest over a distance at which the acceleration just
+/// touches its limits (2 a^3 / j^2), partly together with the velocity limit
+/// (a^2 / j): the peak of the profile without phases of constant acceleration
+/// exceeded the limit by rounding, while these phases were too short to
+/// count (step 1 failed, as in upstream Ruckig)
+#[test]
+fn test_position_touching_acceleration_limits() {
+    // p0, pf, v_max, a_max, j_max, duration
+    let cases = [
+        [0.0, 5.4, 200.0, 3000.0, 100000.0, 0.12],
+        [0.0, 5.400000000000001, 200.0, 3000.0, 100000.0, 0.12],
+        [0.0, 5.4000000000000066, 200.0, 3000.0, 100000.0, 0.12],
+        [0.0, 5.4, 111.94384625378346, 3000.0, 100000.0, 0.12],
+        [1.4605632494715692, 6.8605632494715758, 111.94384625378346, 3000.0, 100000.0, 0.12],
+        [0.0, 10.000000000000004, 50.0, 500.0, 5000.0, 0.4],
+        [4.2315545023694767, 14.2315545023694803, 50.0, 500.0, 5000.0, 0.4],
+        [0.0, 10.0, 50.0, 500.0, 5000.0, 0.4],
+        [0.0, 9.999999999999998, 50.0, 500.0, 5000.0, 0.4],
+        // Limits whose resolution is coarser than the absolute tolerances
+        [-4.0485948169797803, 35480.053123373138, 7738.8155345466857, 3375.5548528957256, 1472.3662185824835, 9.170421897197647],
+    ];
+
+    for [p0, pf, v_max, a_max, j_max, expected] in cases {
+        let mut input = InputParameter::<1>::new(None);
+        input.current_position = daov_stack![p0];
+        input.target_position = daov_stack![pf];
+        input.max_velocity = daov_stack![v_max];
+        input.max_acceleration = daov_stack![a_max];
+        input.max_jerk = daov_stack![j_max];
+
+        let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.001);
+        let mut traj = Trajectory::new(None);
+        let result = otg.calculate(&input, &mut traj);
+        assert_eq!(result.map_err(|e| e.to_string()), Ok(RuckigResult::Working), "to {pf}");
+
+        let duration = traj.get_duration();
+        assert_float_eq!(duration, expected, abs <= 1e-12);
+
+        let end = traj.state_at(duration);
+        assert_float_eq!(end.position[0], pf, abs <= 1e-9);
+        assert_float_eq!(end.velocity[0], 0.0, abs <= 1e-9);
+        assert_float_eq!(end.acceleration[0], 0.0, abs <= 1e-9);
+
+        assert_within_limits(&input, &traj);
+    }
+}
+
+/// Moves of rscnc that failed in step 1 by rounding only (most of them fail
+/// in upstream Ruckig as well; the moves from rest with a deceleration limit
+/// of some thousands succeed there):
+/// - from rest to rest with different limits for acceleration and
+///   deceleration, over a distance at which the lower one is just reached,
+/// - from rest to rest with limits of some thousands, whose resolution is
+///   coarser than the absolute tolerance of the profile check, and
+/// - re-planned from a state of a running profile, where the acceleration
+///   limit is reached by construction, a phase vanishes at the end, or the
+///   state after the brake profile is at the velocity limit.
+#[test]
+fn test_position_at_profile_borders_and_high_limits() {
+    // p0, v0, a0, pf, v_max, a_max, a_min, j_max
+    let none = f64::NAN;
+    #[rustfmt::skip]
+    let cases = [
+        [0.3305072073372264, 0.0, 0.0, 0.7564272073372305, 69.8679531783741936, 440.0, -1000.0, 20000.0],
+        [25.2038415752106921, 0.0, 0.0, 25.2646765752106930, 88.0207976759676569, 350.0, -230.0, 20000.0],
+        [9.5139315860761542, 0.0, 0.0, 9.7139315860761588, 19.2694229919122115, 3000.0, -1000.0, 100000.0],
+        [0.0, 0.0, 0.0, 80.464, 1.0e6, 10000.0, -4000.0, 50000.0],
+        [0.0, 0.0, 0.0, 86.264, 1.0e6, 10000.0, -4000.0, 50000.0],
+        [0.0, 0.0, 0.0, 217.9632, 1.0e6, 6000.0, -3000.0, 30000.0],
+        [0.0, 0.0, 0.0, 0.20783, 1.0e6, 10000.0, -4000.0, 1.0e6],
+        [0.0, 0.0, 0.0, 160.464, 1.0e6, 20000.0, -8000.0, 100000.0],
+        [0.0, 0.0, 0.0, 7.91698694742703879e2, 1.0e6, 9.89623368428380309e3, -4.01476453880622148e3, 4.94811684214190172e4],
+        [7.73054920674879185e1, 5.35077798200030514e1, 2.47940484937907922e3, 7.88471555846658561e1, 3.81425860694441212e2, 3000.0, none, 2.88248514812506794e5],
+        [6.38870424613712129e-1, 1.00401113581114032e2, 6.94178172774930044e3, 3.20118436424864639e0, 5.27093707286114295e2, 8.62353945700734766e3, none, 8.59584798416446080e5],
+        [-6.83219815346825641e1, 1.43556680302960249e1, 2.51982894007541790e3, -6.81582805614554985e1, 2.82127499787189180e1, 3000.0, none, 6.94619435714184423e5],
+        [1.08423981130202520e1, 2.80275207050567133e2, 2.26127515896611612e3, 3.68902395574895223e1, 3.38999777145342080e2, 4.45273967541855200e3, none, 8.90547935083710472e4],
+        [-4.81533508037750906e1, 1.85906600029214189e2, 2.38305795589645959e3, -2.92294522034591147e1, 2.70741950166248387e2, 3000.0, none, 7.80503145413719176e4],
+        [2.16097688053005186e1, 5.19199488476061333e2, 4.98998444383786955e3, 1.05775623905558263e2, 7.22087227342823439e2, 6.31431394819386605e3, -2.02067634152031110e3, 3.75650673819755262e5],
+        [3.88939999999999984e1, 4.83000003706214954e2, 2.99999999999999454e3, 1.43257495115174351e2, 1.45152183511143136e2, 3000.0, -1.41999574570260065e4, 300000.0],
+        [3.53306418237799136e1, 1.09314683272240899e2, 3.56148235358225804e2, 4.28234187790264968e1, 7.66170213745982398e0, 9.77638229270576289e2, -4.15581256893435511e3, 1.64007709662116074e5],
+        // Found by the random tests: at the velocity limit after the brake
+        // profile, and a target just short of the position of the fastest stop
+        [0.0043014788621616, 1.3537405614441522, 261.9098265161763948, 905.2205000000000155, 2.4929678283002787, 349.0815542034002874, -139.6326216813601206, 30106.7044396843375580],
+        [0.1601521184462225, 68.4752438270576107, 18243.2052084032184212, 3.0645662451547011, 127.8696505915645361, 19350.7829459830936685, -3870.1565891966188246, 2801732.9779510037042201],
+    ];
+
+    for (case, [p0, v0, a0, pf, v_max, a_max, a_min, j_max]) in cases.into_iter().enumerate() {
+        let mut input = InputParameter::<1>::new(None);
+        input.current_position = daov_stack![p0];
+        input.current_velocity = daov_stack![v0];
+        input.current_acceleration = daov_stack![a0];
+        input.target_position = daov_stack![pf];
+        input.max_velocity = daov_stack![v_max];
+        input.max_acceleration = daov_stack![a_max];
+        input.min_acceleration = (!a_min.is_nan()).then(|| daov_stack![a_min]);
+        input.max_jerk = daov_stack![j_max];
+        let a_min = if a_min.is_nan() { -a_max } else { a_min };
+
+        let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.001);
+        let mut traj = Trajectory::new(None);
+        let result = otg.calculate(&input, &mut traj);
+        assert_eq!(result.map_err(|e| e.to_string()), Ok(RuckigResult::Working), "case {case}");
+
+        let duration = traj.get_duration();
+        let end = traj.state_at(duration);
+        assert_float_eq!(end.position[0], pf, abs <= 1e-8);
+        assert_float_eq!(end.velocity[0], 0.0, abs <= 1e-8);
+        assert_float_eq!(end.acceleration[0], 0.0, abs <= 1e-8);
+
+        // A velocity beyond its limit at the start (after lowering the
+        // limit) is first brought within it
+        let mut velocity_reached_limit = false;
+        const STEPS: usize = 4096;
+        for step in 0..=STEPS {
+            let state = traj.state_at(duration * step as f64 / STEPS as f64);
+            let (t, v, a, j) = (state.time, state.velocity[0], state.acceleration[0], state.jerk[0]);
+            velocity_reached_limit |= v.abs() <= v_max + 1e-9;
+            assert!(!velocity_reached_limit || v.abs() <= v_max + 1e-9, "case {case}: velocity {v} at t = {t}");
+            assert!(a_min - 1e-9 <= a && a <= a_max + 1e-9, "case {case}: acceleration {a} at t = {t}");
+            assert!(j.abs() <= j_max * (1.0 + 1e-12), "case {case}: jerk {j} at t = {t}");
+        }
+    }
+}

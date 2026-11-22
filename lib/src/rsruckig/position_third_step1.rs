@@ -1,6 +1,6 @@
 //! Mathematical equations for Step 1 in third-order position interface: Extremal profiles
 use crate::block::{Block, Interval};
-use crate::profile::{ControlSigns, Profile, ReachedLimits};
+use crate::profile::{ConstructedLimits, ControlSigns, Profile, ReachedLimits};
 use crate::roots;
 
 #[cfg(not(feature = "std"))]
@@ -49,6 +49,9 @@ pub struct PositionThirdOrderStep1 {
 
     // Solve the quartics relative to the magnitude of their roots (fallback)
     scaled_roots: bool,
+
+    // Check the profiles with `Profile::check_robust` (fallback)
+    robust: bool,
 }
 
 impl PositionThirdOrderStep1 {
@@ -102,6 +105,7 @@ impl PositionThirdOrderStep1 {
             valid_profiles: Default::default(),
             current_index: 0,
             scaled_roots: false,
+            robust: false,
         }
     }
 
@@ -155,6 +159,50 @@ impl PositionThirdOrderStep1 {
         self.current_index = 0;
     }
 
+    /// The square root of the duration term of a profile reaching the
+    /// velocity limit without a phase of constant acceleration. The term
+    /// vanishes for a state at the velocity limit (e.g. after a brake
+    /// profile) and may then be negative by rounding, relative to the
+    /// `magnitude` of its operands, which the fallback takes for zero.
+    #[inline(always)]
+    fn sqrt_at_velocity_limit(robust: bool, value: f64, magnitude: f64) -> f64 {
+        if robust && value < 0.0 && value > -8.0 * f64::EPSILON * magnitude {
+            0.0
+        } else {
+            value.sqrt()
+        }
+    }
+
+    /// The regular check of a profile, or the robust one of the fallback
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn check(
+        robust: bool,
+        profile: &mut Profile,
+        limits: ReachedLimits,
+        constructed: ConstructedLimits,
+        j_max: f64,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+    ) -> bool {
+        if robust {
+            profile.check_robust(
+                ControlSigns::UDDU,
+                limits,
+                constructed,
+                j_max,
+                v_max,
+                v_min,
+                a_max,
+                a_min,
+            )
+        } else {
+            profile.check_with_timing(ControlSigns::UDDU, limits, j_max, v_max, v_min, a_max, a_min)
+        }
+    }
+
     #[inline]
     fn add_profile(&mut self) {
         if self.current_index < 5 {
@@ -202,9 +250,7 @@ impl PositionThirdOrderStep1 {
             -(self.af_af / 2.0 - a_min * a_min - j_max * (self.vf - v_max)) / (a_min * j_max);
         profile.t[6] = profile.t[4] + self.af / j_max;
 
-        if profile.check_with_timing(
-            ControlSigns::UDDU,
-            ReachedLimits::Vel,
+        if Self::check(self.robust, profile, ReachedLimits::Vel, ConstructedLimits::ACC0_ACC1,
             j_max,
             v_max,
             v_min,
@@ -217,7 +263,11 @@ impl PositionThirdOrderStep1 {
 
         // ACC1_VEL
         let profile = &mut self.valid_profiles[self.current_index];
-        let t_acc0 = (self.a0_a0 / (2.0 * self.j_max_j_max) + (v_max - self.v0) / j_max).sqrt();
+        let t_acc0 = Self::sqrt_at_velocity_limit(
+            self.robust,
+            self.a0_a0 / (2.0 * self.j_max_j_max) + (v_max - self.v0) / j_max,
+            (v_max.abs() + self.v0.abs()) / j_max.abs(),
+        );
 
         profile.t[0] = t_acc0 - self.a0 / j_max;
         profile.t[1] = 0.0;
@@ -234,9 +284,7 @@ impl PositionThirdOrderStep1 {
                     + a_min * t_acc0 * (self.a0_a0 - 2.0 * j_max * (self.v0 + v_max))))
             / (24.0 * a_min * self.j_max_j_max * v_max);
 
-        if profile.check_with_timing(
-            ControlSigns::UDDU,
-            ReachedLimits::Vel,
+        if Self::check(self.robust, profile, ReachedLimits::Vel, ConstructedLimits::ACC1,
             j_max,
             v_max,
             v_min,
@@ -249,7 +297,11 @@ impl PositionThirdOrderStep1 {
 
         // ACC0_VEL
         let profile = &mut self.valid_profiles[self.current_index];
-        let t_acc1 = (self.af_af / (2.0 * self.j_max_j_max) + (v_max - self.vf) / j_max).sqrt();
+        let t_acc1 = Self::sqrt_at_velocity_limit(
+            self.robust,
+            self.af_af / (2.0 * self.j_max_j_max) + (v_max - self.vf) / j_max,
+            (v_max.abs() + self.vf.abs()) / j_max.abs(),
+        );
 
         profile.t[0] = (-self.a0 + a_max) / j_max;
         profile.t[1] =
@@ -270,9 +322,7 @@ impl PositionThirdOrderStep1 {
         profile.t[5] = 0.0;
         profile.t[6] = t_acc1 + self.af / j_max;
 
-        if profile.check_with_timing(
-            ControlSigns::UDDU,
-            ReachedLimits::Vel,
+        if Self::check(self.robust, profile, ReachedLimits::Vel, ConstructedLimits::ACC0,
             j_max,
             v_max,
             v_min,
@@ -296,9 +346,7 @@ impl PositionThirdOrderStep1 {
             - (self.v0 / v_max + 1.0) * t_acc0
             - (self.vf / v_max + 1.0) * t_acc1
             + self.pd / v_max;
-        if profile.check_with_timing(
-            ControlSigns::UDDU,
-            ReachedLimits::Vel,
+        if Self::check(self.robust, profile, ReachedLimits::Vel, ConstructedLimits::NONE,
             j_max,
             v_max,
             v_min,
@@ -354,9 +402,7 @@ impl PositionThirdOrderStep1 {
                 profile.t[5] = h3 + h1 / a_min;
                 profile.t[6] = profile.t[4] + self.af / j_max;
 
-                if profile.check_with_timing(
-                    ControlSigns::UDDU,
-                    ReachedLimits::Acc0Acc1,
+                if Self::check(self.robust, profile, ReachedLimits::Acc0Acc1, ConstructedLimits::ACC0_ACC1,
                     j_max,
                     v_max,
                     v_min,
@@ -381,9 +427,7 @@ impl PositionThirdOrderStep1 {
                 profile.t[5] = h3 - h1 / a_min;
                 profile.t[6] = profile.t[4] + self.af / j_max;
 
-                if profile.check_with_timing(
-                    ControlSigns::UDDU,
-                    ReachedLimits::Acc0Acc1,
+                if Self::check(self.robust, profile, ReachedLimits::Acc0Acc1, ConstructedLimits::ACC0_ACC1,
                     j_max,
                     v_max,
                     v_min,
@@ -392,6 +436,89 @@ impl PositionThirdOrderStep1 {
                 ) {
                     self.add_profile();
                 }
+            }
+        }
+    }
+
+    /// [`Self::time_acc0_acc1`] for numerically degenerate inputs.
+    ///
+    /// At the boundary between the profiles without and with phases of
+    /// constant acceleration, where the acceleration just touches its limits
+    /// (e.g. a move from rest to rest over `2 a_max^3 / j_max^2`), both
+    /// neighbours may be rejected by rounding: the peak acceleration of the
+    /// profile without plateaus exceeds the limit by more than the tolerance,
+    /// while the plateaus are shorter than the machine epsilon (or negative
+    /// by rounding) and count as missing. Plateaus of vanishing duration are
+    /// therefore accepted here.
+    fn time_acc0_acc1_degenerate(
+        &mut self,
+        v_max: f64,
+        v_min: f64,
+        a_max: f64,
+        a_min: f64,
+        j_max: f64,
+    ) {
+        let h1 = (3. * (self.af_p4 * a_max - self.a0_p4 * a_min)
+            + a_max
+                * a_min
+                * (8. * (self.a0_p3 - self.af_p3)
+                    + 3. * a_max * a_min * (a_max - a_min)
+                    + 6. * a_min * self.af_af
+                    - 6. * a_max * self.a0_a0)
+            + 12.
+                * j_max
+                * (a_max
+                    * a_min
+                    * ((a_max - 2. * self.a0) * self.v0 - (a_min - 2. * self.af) * self.vf)
+                    + a_min * self.a0_a0 * self.v0
+                    - a_max * self.af_af * self.vf))
+            / (3. * (a_max - a_min) * self.j_max_j_max)
+            + 4. * (a_max * self.vf_vf - a_min * self.v0_v0 - 2. * a_min * a_max * self.pd)
+                / (a_max - a_min);
+        if h1 < 0. {
+            return;
+        }
+
+        let h1 = f64::sqrt(h1) / 2.;
+        let h2 = self.a0_a0 / (2. * a_max * j_max) + (a_min - 2. * a_max) / (2. * j_max)
+            - self.v0 / a_max;
+        let h3 = -self.af_af / (2. * a_min * j_max) - (a_max - 2. * a_min) / (2. * j_max)
+            + self.vf / a_min;
+
+        // The rounding error of the plateau durations
+        let tolerance = 8.0
+            * f64::EPSILON
+            * f64::max(1.0, h2.abs() + h3.abs() + (h1 / a_max).abs() + (h1 / a_min).abs());
+
+        for sign in [-1.0, 1.0] {
+            let t1 = h2 + sign * h1 / a_max;
+            let t5 = h3 - sign * h1 / a_min;
+            // Only profiles with a vanishing plateau are missing
+            if t1 < -tolerance || t5 < -tolerance || (t1 >= tolerance && t5 >= tolerance) {
+                continue;
+            }
+
+            let profile = &mut self.valid_profiles[self.current_index];
+            profile.t[0] = (-self.a0 + a_max) / j_max;
+            profile.t[1] = if t1 < tolerance { 0. } else { t1 };
+            profile.t[2] = a_max / j_max;
+            profile.t[3] = 0.;
+            profile.t[4] = -a_min / j_max;
+            profile.t[5] = if t5 < tolerance { 0. } else { t5 };
+            profile.t[6] = profile.t[4] + self.af / j_max;
+
+            if profile.check_robust(
+                ControlSigns::UDDU,
+                ReachedLimits::Acc0Acc1,
+                ConstructedLimits::ACC0_ACC1,
+                j_max,
+                v_max,
+                v_min,
+                a_max,
+                a_min,
+            ) {
+                self.add_profile();
+                return;
             }
         }
     }
@@ -514,8 +641,12 @@ impl PositionThirdOrderStep1 {
             roots::PositiveSet::new()
         };
 
+        // A root at the border of its interval (a vanishing phase) may lie
+        // beyond it by rounding, which the robust check accounts for
+        let slack = if self.robust { 8.0 * f64::EPSILON } else { 0.0 };
+
         for mut t in &mut roots_none.into_iter() {
-            if t < t_min_none || t > t_max_none {
+            if t < t_min_none - slack || t > t_max_none + slack {
                 continue;
             }
 
@@ -534,7 +665,11 @@ impl PositionThirdOrderStep1 {
                     + (3.0 * h1) / 4.0;
 
                 let delta_t = orig / deriv;
-                t -= delta_t;
+                // The derivative vanishes at a double root, i.e. for a
+                // vanishing phase at the border of the interval
+                if !self.robust || (delta_t.is_finite() && delta_t.abs() < 0.5 * t) {
+                    t -= delta_t;
+                }
             }
             let profile = &mut self.valid_profiles[self.current_index];
             let h0 = h2_none / (2.0 * j_max * t);
@@ -546,9 +681,7 @@ impl PositionThirdOrderStep1 {
             profile.t[5] = 0.0;
             profile.t[6] = -h0 + t / 2.0 + self.af / j_max;
 
-            if profile.check_with_timing(
-                ControlSigns::UDDU,
-                ReachedLimits::None,
+            if Self::check(self.robust, profile, ReachedLimits::None, ConstructedLimits::NONE,
                 j_max,
                 v_max,
                 v_min,
@@ -563,7 +696,7 @@ impl PositionThirdOrderStep1 {
         }
 
         for mut t in &mut roots_acc0.into_iter() {
-            if t < t_min_acc0 || t > t_max_acc0 {
+            if t < t_min_acc0 - slack || t > t_max_acc0 + slack {
                 continue;
             }
 
@@ -575,7 +708,11 @@ impl PositionThirdOrderStep1 {
                 let deriv = 2.0 * (h2_acc0 + h1 * (2.0 * h1 - 3.0 * a_max));
 
                 let delta_t = orig / deriv;
-                t -= delta_t;
+                // The derivative vanishes at a double root, i.e. for a
+                // vanishing phase at the border of the interval
+                if !self.robust || (delta_t.is_finite() && delta_t.abs() < 0.5 * t) {
+                    t -= delta_t;
+                }
             }
             let profile = &mut self.valid_profiles[self.current_index];
             profile.t[0] = (-self.a0 + a_max) / j_max;
@@ -586,9 +723,7 @@ impl PositionThirdOrderStep1 {
             profile.t[5] = 0.0;
             profile.t[6] = (self.af - a_max) / j_max + t;
 
-            if profile.check_with_timing(
-                ControlSigns::UDDU,
-                ReachedLimits::Acc0,
+            if Self::check(self.robust, profile, ReachedLimits::Acc0, ConstructedLimits::ACC0,
                 j_max,
                 v_max,
                 v_min,
@@ -603,7 +738,7 @@ impl PositionThirdOrderStep1 {
         }
 
         for mut t in &mut roots_acc1.into_iter() {
-            if t < t_min_acc1 || t > t_max_acc1 {
+            if t < t_min_acc1 - slack || t > t_max_acc1 + slack {
                 continue;
             }
 
@@ -664,9 +799,7 @@ impl PositionThirdOrderStep1 {
             profile.t[5] = h3_acc1 - (2.0 * self.a0 + j_max * t) * t / a_min;
             profile.t[6] = (self.af - a_min) / j_max;
 
-            if profile.check_with_timing(
-                ControlSigns::UDDU,
-                ReachedLimits::Acc1,
+            if Self::check(self.robust, profile, ReachedLimits::Acc1, ConstructedLimits::ACC1_PEAK,
                 j_max,
                 v_max,
                 v_min,
@@ -1195,6 +1328,57 @@ impl PositionThirdOrderStep1 {
                 }
             }
             self.scaled_roots = false;
+            if self.current_index > 0 {
+                break 'search;
+            }
+
+            // Fallback for profiles that the regular check rejects by
+            // rounding only: the search is repeated with the robust check,
+            // at last also with the roots of the scaled polynomials
+            self.robust = true;
+            for scaled_roots in [false, true] {
+                self.scaled_roots = scaled_roots;
+                if f64::abs(self.vf) < f64::EPSILON && f64::abs(self.af) < f64::EPSILON {
+                    for (v_max, v_min, a_max, a_min, j_max) in directions {
+                        self.time_all_vel(v_max, v_min, a_max, a_min, j_max, true);
+                        if self.current_index == 0 {
+                            self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+                        }
+                        if self.current_index == 0 {
+                            self.time_acc0_acc1(v_max, v_min, a_max, a_min, j_max, true);
+                        }
+                        if self.current_index > 0 {
+                            break;
+                        }
+                    }
+                } else {
+                    for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                        self.time_all_none_acc0_acc1(v_max, v_min, a_max, a_min, j_max, false);
+                    }
+                    for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                        self.time_acc0_acc1(v_max, v_min, a_max, a_min, j_max, false);
+                    }
+                    for (v_max, v_min, a_max, a_min, j_max) in [up, down] {
+                        self.time_all_vel(v_max, v_min, a_max, a_min, j_max, false);
+                    }
+                }
+                if self.current_index > 0 {
+                    break;
+                }
+            }
+            self.scaled_roots = false;
+            self.robust = false;
+            if self.current_index > 0 {
+                break 'search;
+            }
+
+            // Fallback for profiles that just touch both acceleration limits
+            for (v_max, v_min, a_max, a_min, j_max) in directions {
+                self.time_acc0_acc1_degenerate(v_max, v_min, a_max, a_min, j_max);
+                if self.current_index > 0 {
+                    break;
+                }
+            }
         }
 
         Block::calculate_block(
