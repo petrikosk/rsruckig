@@ -1098,6 +1098,63 @@ impl Profile {
         extrema
     }
 
+    /// Duration of the profile including the brake pre-trajectory
+    #[inline]
+    pub fn total_duration(&self) -> f64 {
+        self.brake.duration + self.t_sum[6]
+    }
+
+    /// The final state `(position, velocity)` after holding the profile until
+    /// `duration` (measured from the start of the brake pre-trajectory).
+    ///
+    /// A profile that ends before `duration` - a DoF without synchronization
+    /// or a disabled DoF - keeps moving with its final velocity and constant
+    /// final acceleration, exactly as the trajectory is sampled.
+    #[inline]
+    pub fn state_after(&self, duration: f64) -> (f64, f64) {
+        let t_tail = duration - self.total_duration();
+        if t_tail > 0.0 {
+            let (p, v, _) = integrate(t_tail, self.p[7], self.v[7], self.a[7], 0.0);
+            (p, v)
+        } else {
+            (self.p[7], self.v[7])
+        }
+    }
+
+    /// Like [`get_position_extrema`](Self::get_position_extrema), but over
+    /// the whole interval until `duration` (measured from the start of the
+    /// brake pre-trajectory): includes the motion of a profile that ends
+    /// before `duration` and continues with its final velocity and constant
+    /// final acceleration.
+    pub fn get_position_extrema_until(&self, duration: f64) -> Bound {
+        let mut extrema = self.get_position_extrema();
+
+        let t_end = self.total_duration();
+        let t_tail = duration - t_end;
+        if t_tail > 0.0 {
+            Self::check_step_for_position_extremum(
+                t_end,
+                t_tail,
+                self.p[7],
+                self.v[7],
+                self.a[7],
+                0.0,
+                &mut extrema,
+            );
+            let (p_end, _) = self.state_after(duration);
+            if p_end < extrema.min {
+                extrema.min = p_end;
+                extrema.t_min = duration;
+            }
+            if p_end > extrema.max {
+                extrema.max = p_end;
+                extrema.t_max = duration;
+            }
+        }
+
+        extrema
+    }
+
     /// Returns the first time at which the profile reaches the position `pt`,
     /// together with the velocity and acceleration at that time, as
     /// `(time, velocity, acceleration)`. `offset` is added to the returned time.

@@ -404,10 +404,6 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         }
     }
 
-    /// Check a single profile against the position limits of `dof`.
-    /// Returns (upper_limit_violated, lower_limit_violated). Besides the extrema
-    /// of the profile itself, the end state must leave enough margin for a full
-    /// stop inside the limits, so that the system can always stay in the workspace.
     /// Start position of a profile, including a possible brake pre-trajectory
     #[inline]
     fn profile_start_position(profile: &Profile) -> f64 {
@@ -418,11 +414,18 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         }
     }
 
+    /// Check a single profile against the position limits of `dof`, over the
+    /// whole trajectory `duration`: a profile that ends earlier (a DoF without
+    /// synchronization) keeps moving with its final velocity until then.
+    /// Returns (upper_limit_violated, lower_limit_violated). Besides the extrema
+    /// of the profile itself, the end state must leave enough margin for a full
+    /// stop inside the limits, so that the system can always stay in the workspace.
     fn profile_position_violations(
         &self,
         dof: usize,
         inp: &InputParameter<DOF>,
         profile: &Profile,
+        duration: f64,
     ) -> (bool, bool) {
         // If the current position already lies outside the limits, the
         // trajectory back inside is still allowed - it must only never move
@@ -433,13 +436,14 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         let tol_up = Self::position_limit_tolerance(max_pos);
         let tol_down = Self::position_limit_tolerance(min_pos);
 
-        let ext = profile.get_position_extrema();
+        let ext = profile.get_position_extrema_until(duration);
         let mut up = ext.max > max_pos + tol_up;
         let mut down = ext.min < min_pos - tol_down;
 
-        let (stop_up, stop_down) = self.stop_distances(dof, inp, profile.v[7], profile.a[7]);
-        up |= profile.p[7] + stop_up > max_pos + tol_up;
-        down |= profile.p[7] - stop_down < min_pos - tol_down;
+        let (p_end, v_end) = profile.state_after(duration);
+        let (stop_up, stop_down) = self.stop_distances(dof, inp, v_end, profile.a[7]);
+        up |= p_end + stop_up > max_pos + tol_up;
+        down |= p_end - stop_down < min_pos - tol_down;
 
         (up, down)
     }
@@ -805,7 +809,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
         match self.inp_per_dof_control_interface[dof] {
             ControlInterface::Position => {
-                let (up_viol, down_viol) = self.profile_position_violations(dof, inp, profile);
+                let (up_viol, down_viol) = self.profile_position_violations(dof, inp, profile, duration);
                 if !up_viol && !down_viol {
                     return true;
                 }
@@ -833,7 +837,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                         continue;
                     }
 
-                    let (up_viol, down_viol) = self.profile_position_violations(dof, inp, profile);
+                    let (up_viol, down_viol) = self.profile_position_violations(dof, inp, profile, duration);
                     up.update(v_up, up_viol);
                     down.update(v_down, down_viol);
 
@@ -859,7 +863,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                         continue;
                     }
 
-                    let (up_viol, down_viol) = self.profile_position_violations(dof, inp, profile);
+                    let (up_viol, down_viol) = self.profile_position_violations(dof, inp, profile, duration);
                     if up_viol || down_viol {
                         hi = vf.abs();
                     } else {
@@ -928,13 +932,28 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                 continue;
             }
 
-            let (up, down) = self.profile_position_violations(dof, inp, &traj.profiles[0][dof]);
+            let duration = traj.duration;
+            let (up, down) =
+                self.profile_position_violations(dof, inp, &traj.profiles[0][dof], duration);
             if !up && !down {
                 continue;
             }
 
-            let duration = traj.duration;
             let mut profile = traj.profiles[0][dof];
+
+            // A DoF without synchronization that ends before the trajectory
+            // keeps moving with its target velocity until the other DoFs
+            // finish. If that leaves the position limits, let it reach its
+            // target state at the end of the trajectory instead.
+            if profile.total_duration() < duration - self.eps {
+                let t_profile = duration - profile.brake.duration - profile.accel.duration;
+                let (v_max, v_min) = (self.eff_max_velocity[dof], self.eff_min_velocity[dof]);
+                let mut synchronized = profile;
+                if self.run_step2(dof, inp, t_profile, v_max, v_min, &mut synchronized) {
+                    profile = synchronized;
+                }
+            }
+
             if self.repair_profile_step2(dof, inp, duration, &mut profile) {
                 traj.profiles[0][dof] = profile;
                 continue;

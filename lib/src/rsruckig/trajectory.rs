@@ -369,18 +369,27 @@ impl<const DOF: usize> Trajectory<DOF> {
     /// Position extrema of each DoF over the whole trajectory, together with
     /// the (absolute) times at which they are reached.
     ///
+    /// The extrema bound every state sampled between zero and the duration
+    /// of the trajectory: a DoF whose profile ends earlier (no
+    /// synchronization, or a disabled DoF) keeps moving with its final
+    /// velocity until the trajectory ends, which is included here.
+    ///
     /// The extrema are computed on each call and cached in the trajectory,
     /// hence the `&mut self`.
     pub fn get_position_extrema(&mut self) -> &DataArrayOrVec<Bound, { DOF }> {
+        let section_duration = self.cumulative_times[0];
         for dof in 0..self.degrees_of_freedom {
-            self.position_extrema[dof] = self.profiles[0][dof].get_position_extrema();
+            self.position_extrema[dof] =
+                self.profiles[0][dof].get_position_extrema_until(section_duration);
         }
 
         for i in 1..self.profiles.len() {
             // Profile times are section-local; offset by the section start
             let t_offset = self.section_start(i);
+            let section_duration = self.cumulative_times[i] - t_offset;
             for dof in 0..self.degrees_of_freedom {
-                let section_position_extrema = self.profiles[i][dof].get_position_extrema();
+                let section_position_extrema =
+                    self.profiles[i][dof].get_position_extrema_until(section_duration);
                 if section_position_extrema.max > self.position_extrema[dof].max {
                     self.position_extrema[dof].max = section_position_extrema.max;
                     self.position_extrema[dof].t_max = section_position_extrema.t_max + t_offset;

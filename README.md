@@ -519,6 +519,10 @@ position extrema, and if needed, the effective velocity limits of the affected D
 end state to leave enough stopping margin, so the system can always stay inside the workspace afterwards. With the
 velocity control interface, the effective target velocity is capped accordingly.
 
+The limits hold for the whole trajectory duration. A DoF without synchronization (`Synchronization::None`) that
+reaches its target with a velocity keeps moving until the slowest DoF finishes; if that motion would leave the
+limits, the DoF reaches its target state at the end of the trajectory instead.
+
 If the current kinematic state makes crossing a limit unavoidable (e.g. too fast, too close to the limit), the best
 possible braking is applied and `RuckigResult::ErrorPositionalLimits` (-102) is returned - a violation is never
 silent. Input validation also catches target states outside the limits and current/target states from which a stop
@@ -665,6 +669,21 @@ against following versions
 
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
+
+### Fixes in 3.1.3
+
+Position limits and position extrema of DoFs that finish before the trajectory ends
+([#17](https://github.com/petrikosk/rsruckig/issues/17)). A DoF without synchronization (`Synchronization::None`)
+that reaches its target with a velocity keeps moving with that velocity until the slowest DoF finishes.
+
+- The position limits are checked over the whole trajectory duration, including this motion after the profile of
+  the DoF. If it would leave the limits, the DoF reaches its target state at the end of the trajectory instead (as
+  with time synchronization); if that is not possible either, `RuckigResult::ErrorPositionalLimits` is returned.
+  Before, the calculation returned `Working` for a trajectory that left the limits.
+- `Trajectory::get_position_extrema` includes this motion (also for disabled DoFs), so that the extrema bound every
+  state sampled between zero and the duration.
+
+Trajectories that stay inside the limits are unchanged.
 
 ### Fixes in 3.1.2
 

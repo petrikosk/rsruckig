@@ -9,6 +9,9 @@ use rand_distr::{Distribution, Uniform};
 use rand_pcg::Pcg64Mcg;
 
 const LIMIT_TOL: f64 = 1e-6;
+/// A profile reaches its target position within the precision of the profile
+/// check (1e-8), which the extrema do not account for
+const EXTREMA_TOL: f64 = 1e-7;
 
 /// Assert that the trajectory extrema of every DoF stay inside the given limits
 fn assert_extrema_within(
@@ -415,4 +418,160 @@ fn test_stepwise_update_respects_limits() {
     }
     assert!(steps < 20_000, "did not finish");
     assert!((output.new_position[0] - 0.5).abs() < 1e-6);
+}
+
+/// Sample the whole trajectory and assert that every position of `dof` stays
+/// inside the limits and inside the reported extrema
+fn assert_samples_within<const DOF: usize>(
+    traj: &mut Trajectory<DOF>,
+    dof: usize,
+    min_pos: f64,
+    max_pos: f64,
+) {
+    let duration = traj.get_duration();
+    let ext = traj.get_position_extrema()[dof];
+    assert!(ext.max <= max_pos + LIMIT_TOL, "extremum {}", ext.max);
+    assert!(ext.min >= min_pos - LIMIT_TOL, "extremum {}", ext.min);
+
+    for i in 0..=2000 {
+        let t = duration * f64::from(i) / 2000.0;
+        let p = traj.state_at(t).position[dof];
+        assert!(p <= max_pos + LIMIT_TOL, "position {p} at t = {t}");
+        assert!(p >= min_pos - LIMIT_TOL, "position {p} at t = {t}");
+        assert!(
+            p <= ext.max + EXTREMA_TOL && p >= ext.min - EXTREMA_TOL,
+            "position {p} at t = {t} outside of the extrema [{}, {}]",
+            ext.min,
+            ext.max
+        );
+    }
+}
+
+#[test]
+fn test_no_synchronization_respects_limits_until_the_end() {
+    // Issue #17: DoF 0 reaches its target with a velocity long before DoF 1
+    // finishes, and must not drift beyond its limit in the meantime
+    let mut otg = Ruckig::<2, ThrowErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::<2>::new(None);
+    let mut traj = Trajectory::<2>::new(None);
+
+    input.synchronization = Synchronization::None;
+    input.target_position = daov_stack![0.5, 10.0];
+    input.target_velocity = daov_stack![0.5, 0.0];
+    input.max_velocity = daov_stack![1.0, 1.0];
+    input.max_acceleration = daov_stack![1.0, 1.0];
+    input.max_jerk = daov_stack![1.0, 1.0];
+    input.min_position = Some(daov_stack![-1.0, -1.0]);
+    input.max_position = Some(daov_stack![1.5, 11.0]);
+
+    let result = otg.calculate(&input, &mut traj).unwrap();
+    assert_eq!(result, RuckigResult::Working);
+    assert_samples_within(&mut traj, 0, -1.0, 1.5);
+    assert_samples_within(&mut traj, 1, -1.0, 11.0);
+
+    // Both DoFs reach their target state at the end
+    let end = traj.state_at(traj.get_duration());
+    assert!((end.position[0] - 0.5).abs() < 1e-6);
+    assert!((end.velocity[0] - 0.5).abs() < 1e-6);
+    assert!((end.position[1] - 10.0).abs() < 1e-6);
+}
+
+#[test]
+fn test_no_synchronization_is_unchanged_inside_the_limits() {
+    // The same motion with enough room: DoF 0 stays independent and keeps
+    // its target velocity after its own (shorter) profile
+    let mut otg = Ruckig::<2, ThrowErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::<2>::new(None);
+    let mut traj = Trajectory::<2>::new(None);
+
+    input.synchronization = Synchronization::None;
+    input.target_position = daov_stack![0.5, 10.0];
+    input.target_velocity = daov_stack![0.5, 0.0];
+    input.max_velocity = daov_stack![1.0, 1.0];
+    input.max_acceleration = daov_stack![1.0, 1.0];
+    input.max_jerk = daov_stack![1.0, 1.0];
+    input.min_position = Some(daov_stack![-1.0, -1.0]);
+    input.max_position = Some(daov_stack![20.0, 11.0]);
+
+    otg.calculate(&input, &mut traj).unwrap();
+    let duration = traj.get_duration();
+    let t_dof0 = traj.get_independent_min_durations()[0];
+    assert!(t_dof0 < duration - 1.0);
+    assert!(traj.get_profiles()[0][0].total_duration() < duration - 1.0);
+
+    // The extrema include the motion after the profile of DoF 0
+    let end = traj.state_at(duration);
+    let expected = 0.5 + 0.5 * (duration - t_dof0);
+    assert!((end.position[0] - expected).abs() < 1e-9);
+    let ext = traj.get_position_extrema()[0];
+    assert!((ext.max - expected).abs() < 1e-9, "extremum {}", ext.max);
+    assert!((ext.t_max - duration).abs() < 1e-9);
+    assert_samples_within(&mut traj, 0, -1.0, 20.0);
+}
+
+#[test]
+fn test_fuzz_no_synchronization() {
+    let mut rng = Pcg64Mcg::new(0x17);
+    let pos_dist = Uniform::new(-5.0, 5.0);
+    let vel_scale = Uniform::new(0.5, 10.0);
+    let acc_scale = Uniform::new(1.0, 20.0);
+    let jerk_scale = Uniform::new(5.0, 100.0);
+    let margin_dist = Uniform::new(0.0, 3.0);
+    let frac = Uniform::new(-1.0, 1.0);
+
+    let cases = 2000;
+    let mut working = 0usize;
+    for case in 0..cases {
+        let mut input = InputParameter::<3>::new(None);
+        input.synchronization = Synchronization::None;
+        let mut min_pos = [0.0; 3];
+        let mut max_pos = [0.0; 3];
+        for dof in 0..3 {
+            let p0 = pos_dist.sample(&mut rng);
+            let pf = pos_dist.sample(&mut rng);
+            let v_max = vel_scale.sample(&mut rng);
+            input.current_position[dof] = p0;
+            input.target_position[dof] = pf;
+            input.max_velocity[dof] = v_max;
+            input.max_acceleration[dof] = acc_scale.sample(&mut rng);
+            input.max_jerk[dof] = jerk_scale.sample(&mut rng);
+            input.current_velocity[dof] = frac.sample(&mut rng) * v_max;
+            input.target_velocity[dof] = 0.3 * frac.sample(&mut rng) * v_max;
+            min_pos[dof] = p0.min(pf) - margin_dist.sample(&mut rng);
+            max_pos[dof] = p0.max(pf) + margin_dist.sample(&mut rng);
+        }
+        input.min_position = Some(daov_stack![min_pos[0], min_pos[1], min_pos[2]]);
+        input.max_position = Some(daov_stack![max_pos[0], max_pos[1], max_pos[2]]);
+
+        let mut otg = Ruckig::<3, IgnoreErrorHandler>::new(None, 0.01);
+        let mut traj = Trajectory::<3>::new(None);
+        // An error code is acceptable, a silent violation is not
+        if !matches!(otg.calculate(&input, &mut traj), Ok(RuckigResult::Working)) {
+            continue;
+        }
+        working += 1;
+
+        let duration = traj.get_duration();
+        let ext = traj.get_position_extrema().clone();
+        for dof in 0..3 {
+            for i in 0..=200 {
+                let p = traj.state_at(duration * f64::from(i) / 200.0).position[dof];
+                assert!(
+                    p <= max_pos[dof] + LIMIT_TOL && p >= min_pos[dof] - LIMIT_TOL,
+                    "case {case} DoF {dof}: position {p} outside [{}, {}] ({input})",
+                    min_pos[dof],
+                    max_pos[dof]
+                );
+                assert!(
+                    p <= ext[dof].max + EXTREMA_TOL && p >= ext[dof].min - EXTREMA_TOL,
+                    "case {case} DoF {dof}: position {p} outside of the extrema [{}, {}] at i = {i}, duration {duration}, profile {:?} ({input})",
+                    ext[dof].min,
+                    ext[dof].max,
+                    traj.get_profiles()[0][dof]
+                );
+            }
+        }
+    }
+
+    assert!(working > cases / 4, "only {working}/{cases} solvable");
 }
