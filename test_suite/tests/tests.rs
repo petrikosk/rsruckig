@@ -1325,3 +1325,45 @@ fn test_time_reset_on_retarget() {
     let elapsed = cycles as f64 * dt;
     assert_float_eq!(elapsed, output.trajectory.get_duration(), abs <= 2.0 * dt);
 }
+
+#[test]
+fn phase_fallback_can_be_rejected() {
+    let mut planner = Ruckig::<2, IgnoreErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    input.synchronization = Synchronization::Phase;
+    input.target_position = daov_stack![1.0, 0.4];
+    input.max_velocity = daov_stack![0.8, 0.8];
+    input.max_acceleration = daov_stack![1.0, 1.0];
+    input.max_jerk = daov_stack![2.0, 2.0];
+    let mut trajectory = Trajectory::new(None);
+
+    input.allow_phase_fallback = false;
+    assert_eq!(
+        planner.calculate(&input, &mut trajectory).unwrap(),
+        RuckigResult::Working
+    );
+    input.minimum_duration = Some(4.0);
+    assert_eq!(
+        planner.calculate(&input, &mut trajectory).unwrap(),
+        RuckigResult::ErrorSynchronizationCalculation
+    );
+    input.allow_phase_fallback = true;
+    assert_eq!(
+        planner.calculate(&input, &mut trajectory).unwrap(),
+        RuckigResult::Working
+    );
+
+    input.minimum_duration = None;
+    input.current_velocity = daov_stack![0.0, 0.3];
+    let mut output = OutputParameter::new(None);
+    assert_eq!(
+        planner.update(&input, &mut output).unwrap(),
+        RuckigResult::Working
+    );
+    output.pass_to_input(&mut input);
+    input.allow_phase_fallback = false;
+    assert_eq!(
+        planner.update(&input, &mut output).unwrap(),
+        RuckigResult::ErrorSynchronizationCalculation
+    );
+}

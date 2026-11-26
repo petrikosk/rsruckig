@@ -501,6 +501,7 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
         } else {
             inp.synchronization
         };
+        s.allow_phase_fallback = inp.allow_phase_fallback;
         s.enabled.copy_from(&inp.enabled);
         s.minimum_duration = inp
             .per_section_minimum_duration

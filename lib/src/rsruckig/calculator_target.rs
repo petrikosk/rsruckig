@@ -1204,6 +1204,15 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                     continue;
                 }
 
+                if !inp.allow_phase_fallback
+                    && self.inp_per_dof_synchronization[dof] == Synchronization::Phase
+                {
+                    self.report::<T>(format_args!(
+                        "phase synchronization would fall back to time synchronization for dof {dof}"
+                    ))?;
+                    return Ok(Some(RuckigResult::ErrorSynchronizationCalculation));
+                }
+
                 let block = &self.blocks[dof];
                 let p = &mut traj.profiles[0][dof];
                 let t_profile = traj.duration - p.brake.duration - p.accel.duration;
