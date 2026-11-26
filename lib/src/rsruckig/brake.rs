@@ -4,7 +4,6 @@
 //! for safely stopping motion when a trajectory needs to be interrupted.
 
 use crate::util::integrate;
-use core::f64;
 
 #[cfg(not(feature = "std"))]
 use num_traits::Float;

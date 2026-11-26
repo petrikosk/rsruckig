@@ -1,7 +1,6 @@
 //! Which times are possible for synchronization?
 use crate::profile::Profile;
 use core::cmp::Ordering;
-use core::f64;
 use core::fmt;
 use core::option::Option;
 

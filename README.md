@@ -468,6 +468,7 @@ independent_min_durations: DataArrayOrVec<f64, DOF>; // Time-optimal profile for
 <...> pub fn state_at(&self, time: f64) -> KinematicState<DOF>; // The kinematic state at a given time, by value
 <...> pub fn at_times(&self, times) -> impl Iterator<Item = KinematicState<DOF>>; // Lazily sample several times
 <...> get_position_extrema(); // Returns information about the position extrema and their times
+<...> get_velocity_extrema(section, dof); // Velocity extrema of a DoF within a section and their times
 ```
 
 `state_at` and `at_times` are the convenient way to sample a trajectory offline, e.g. for plotting:
@@ -669,6 +670,17 @@ against following versions
 
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
+
+### Changes in 3.2.0
+
+- New: `Trajectory::get_velocity_extrema(section, dof)` returns the minimum and maximum velocity of a DoF within a
+  section (the part of the trajectory up to the next intermediate waypoint; section `0` without waypoints) and the
+  times at which they are reached ([#18](https://github.com/petrikosk/rsruckig/issues/18)). Like the position
+  extrema, they bound every state sampled within the section, including the brake pre-trajectory and the motion of
+  a DoF that finishes before the section ends. `Profile::get_velocity_extrema_until` is the same for a single
+  profile.
+
+No existing API or result changes.
 
 ### Fixes in 3.1.3
 

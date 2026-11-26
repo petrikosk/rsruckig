@@ -404,6 +404,54 @@ impl<const DOF: usize> Trajectory<DOF> {
         &self.position_extrema
     }
 
+    /// Velocity extrema of `dof` within `section`, together with the
+    /// (absolute) times at which they are reached, or `None` if `section` or
+    /// `dof` is out of range.
+    ///
+    /// A trajectory without intermediate waypoints has the single section
+    /// `0`; with waypoints, section `i` ends at
+    /// [`get_intermediate_durations()[i]`](Self::get_intermediate_durations).
+    /// The extrema bound every state sampled within the section, including
+    /// the brake pre-trajectory and the motion of a DoF whose profile ends
+    /// before the section does (no synchronization, or a disabled DoF). They
+    /// are computed from the same phases the trajectory is sampled from, so
+    /// they hold up to floating-point rounding. The peak absolute velocity is
+    /// `min.abs().max(max.abs())`.
+    ///
+    /// ```
+    /// use rsruckig::prelude::*;
+    ///
+    /// let mut otg = Ruckig::<1, ThrowErrorHandler>::new(None, 0.01);
+    /// let mut input = InputParameter::new(None);
+    /// input.target_position = daov_stack![4.0];
+    /// input.max_velocity = daov_stack![1.0];
+    /// input.max_acceleration = daov_stack![1.0];
+    /// input.max_jerk = daov_stack![1.0];
+    ///
+    /// let mut trajectory = Trajectory::new(None);
+    /// otg.calculate(&input, &mut trajectory).unwrap();
+    ///
+    /// let extrema = trajectory.get_velocity_extrema(0, 0).unwrap();
+    /// assert!(extrema.min.abs() < 1e-12);
+    /// assert!((extrema.max - 1.0).abs() < 1e-12);
+    /// assert!(trajectory.get_velocity_extrema(1, 0).is_none());
+    /// ```
+    pub fn get_velocity_extrema(&self, section: usize, dof: usize) -> Option<Bound> {
+        if dof >= self.degrees_of_freedom {
+            return None;
+        }
+        let profile = self.profiles.get(section)?.get(dof)?;
+        let t_offset = self.section_start(section);
+        let section_duration = *self.cumulative_times.get(section)? - t_offset;
+
+        let mut extrema = profile.get_velocity_extrema_until(section_duration);
+        // The durations of a profile's phases can sum up to slightly more
+        // than the section's duration by rounding; keep the times inside
+        extrema.t_min = extrema.t_min.min(section_duration) + t_offset;
+        extrema.t_max = extrema.t_max.min(section_duration) + t_offset;
+        Some(extrema)
+    }
+
     /// The first (absolute) time at which `dof` passes through `position`,
     /// or `None` if the position is never reached or `dof` is out of range
     pub fn get_first_time_at_position(&self, dof: usize, position: f64) -> Option<f64> {

@@ -514,6 +514,103 @@ fn test_brake_only_in_first_section() {
     assert_boundary_continuity(&traj, 1, "brake_only_in_first_section");
 }
 
+/// Assert that the velocity extrema of every section bound the velocities
+/// sampled within that section, tightly, and are attained at their times
+fn assert_velocity_extrema(traj: &Trajectory<0>, dofs: usize, context: &str) {
+    let boundaries = traj.get_intermediate_durations().to_vec();
+    let mut start = 0.0;
+    for (section, &end) in boundaries.iter().enumerate() {
+        for dof in 0..dofs {
+            let extrema = traj.get_velocity_extrema(section, dof).unwrap();
+
+            let steps = 1000;
+            let (mut sampled_min, mut sampled_max) = (f64::INFINITY, f64::NEG_INFINITY);
+            for i in 0..=steps {
+                let t = start + (end - start) * (i as f64) / (steps as f64);
+                let v = sample(traj, dofs, t).1[dof];
+                sampled_min = sampled_min.min(v);
+                sampled_max = sampled_max.max(v);
+            }
+            assert!(
+                extrema.min - 1e-9 <= sampled_min && sampled_max <= extrema.max + 1e-9,
+                "{context}: sampled velocities [{sampled_min}, {sampled_max}] of DoF {dof} in section {section} \
+                 outside the extrema [{}, {}]",
+                extrema.min,
+                extrema.max
+            );
+            // Dense sampling comes close to the true extrema
+            assert!(
+                sampled_min - extrema.min < 1e-3 && extrema.max - sampled_max < 1e-3,
+                "{context}: extrema [{}, {}] of DoF {dof} in section {section} are not tight for the sampled \
+                 velocities [{sampled_min}, {sampled_max}]",
+                extrema.min,
+                extrema.max
+            );
+
+            for (t, expected) in [(extrema.t_min, extrema.min), (extrema.t_max, extrema.max)] {
+                assert!(
+                    start - 1e-12 <= t && t <= end + 1e-12,
+                    "{context}: extremum time {t} of DoF {dof} outside section {section} [{start}, {end}]"
+                );
+                let v = sample(traj, dofs, t).1[dof];
+                assert!(
+                    (v - expected).abs() < 1e-9,
+                    "{context}: velocity extremum {expected} of DoF {dof} in section {section} is not attained \
+                     at t = {t} (sampled {v})"
+                );
+            }
+        }
+        start = end;
+    }
+
+    assert!(traj.get_velocity_extrema(boundaries.len(), 0).is_none());
+    assert!(traj.get_velocity_extrema(0, dofs).is_none());
+}
+
+#[test]
+fn test_velocity_extrema_per_section() {
+    // Direction reversals in every DoF, so that the extrema differ by section
+    let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(3), 0.01);
+    let mut input = basic_input(3);
+    input.target_position[0] = 1.0;
+    input.target_position[1] = -1.0;
+    input.target_position[2] = 0.5;
+    push_waypoint(&mut input, &[0.4, -0.6, 1.0]);
+    push_waypoint(&mut input, &[-0.3, 0.2, 0.7]);
+
+    let mut traj = Trajectory::<0>::new(Some(3));
+    otg.calculate(&input, &mut traj).unwrap();
+    assert_eq!(traj.get_intermediate_durations().len(), 3);
+    assert_velocity_extrema(&traj, 3, "velocity_extrema_per_section");
+
+    // The sections are distinguished: DoF 0 moves forward, then backward
+    let first = traj.get_velocity_extrema(0, 0).unwrap();
+    let second = traj.get_velocity_extrema(1, 0).unwrap();
+    assert!(first.max > 0.1 && second.min < -0.1);
+    assert!(second.t_min > traj.get_intermediate_durations()[0]);
+}
+
+#[test]
+fn test_velocity_extrema_with_brake() {
+    let mut otg = Ruckig::<0, ThrowErrorHandler>::new(Some(1), 0.01);
+    let mut input = basic_input(1);
+    input.current_velocity[0] = 3.0; // above max_velocity: forces a brake pre-trajectory
+    input.target_position[0] = 4.0;
+    push_waypoint(&mut input, &[2.0]);
+    push_waypoint(&mut input, &[3.0]);
+
+    let mut traj = Trajectory::<0>::new(Some(1));
+    otg.calculate(&input, &mut traj).unwrap();
+    assert!(traj.profiles[0][0].brake.duration > 0.0);
+    assert_velocity_extrema(&traj, 1, "velocity_extrema_with_brake");
+
+    // The peak is the initial velocity, during the brake pre-trajectory
+    let extrema = traj.get_velocity_extrema(0, 0).unwrap();
+    assert_eq!(extrema.max, 3.0);
+    assert_eq!(extrema.t_max, 0.0);
+    assert!(traj.get_velocity_extrema(1, 0).unwrap().max <= 2.0 + LIMIT_TOL);
+}
+
 #[test]
 fn test_refinement_improves_duration() {
     // The refined trajectory must never be slower than the raw heuristic

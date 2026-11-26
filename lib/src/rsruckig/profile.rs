@@ -69,16 +69,17 @@ pub enum ControlSigns {
     UDUD,
 }
 
-/// Position extrema of a profile or trajectory and the times they are reached.
+/// Extrema of a profile or trajectory and the times they are reached: of the
+/// position, or of the velocity for the velocity extrema.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Bound {
-    /// The minimum position.
+    /// The minimum position (or velocity).
     pub min: f64,
-    /// The maximum position.
+    /// The maximum position (or velocity).
     pub max: f64,
-    /// The time at which the minimum position is reached.
+    /// The time at which the minimum is reached.
     pub t_min: f64,
-    /// The time at which the maximum position is reached.
+    /// The time at which the maximum is reached.
     pub t_max: f64,
 }
 
@@ -1150,6 +1151,100 @@ impl Profile {
                 extrema.max = p_end;
                 extrema.t_max = duration;
             }
+        }
+
+        extrema
+    }
+
+    /// Updates `ext` with the velocities of a constant-jerk phase (start
+    /// velocity `v`, acceleration `a`, jerk `j`, duration `t`, starting at
+    /// `t_sum`): the velocity at its start and, if the acceleration crosses
+    /// zero strictly inside the phase, the velocity there.
+    fn check_step_for_velocity_extremum(t_sum: f64, t: f64, v: f64, a: f64, j: f64, ext: &mut Bound) {
+        if v < ext.min {
+            ext.min = v;
+            ext.t_min = t_sum;
+        }
+        if v > ext.max {
+            ext.max = v;
+            ext.t_max = t_sum;
+        }
+
+        if j != 0.0 {
+            let t_ext = -a / j;
+            if 0.0 < t_ext && t_ext < t {
+                let (_, v_ext, _) = integrate(t_ext, 0.0, v, a, j);
+                if v_ext < ext.min {
+                    ext.min = v_ext;
+                    ext.t_min = t_sum + t_ext;
+                }
+                if v_ext > ext.max {
+                    ext.max = v_ext;
+                    ext.t_max = t_sum + t_ext;
+                }
+            }
+        }
+    }
+
+    /// Returns the minimum and maximum velocities of the profile over the
+    /// whole interval until `duration` (measured from the start of the brake
+    /// pre-trajectory), and the times at which they are reached.
+    ///
+    /// Like [`get_position_extrema_until`](Self::get_position_extrema_until),
+    /// this covers the brake pre-trajectory and the motion of a profile that
+    /// ends before `duration` and continues with its constant final
+    /// acceleration, exactly as the trajectory is sampled. A `duration`
+    /// shorter than the profile is ignored: the whole profile is covered.
+    pub fn get_velocity_extrema_until(&self, duration: f64) -> Bound {
+        let mut extrema = Bound {
+            min: f64::INFINITY,
+            max: f64::NEG_INFINITY,
+            t_min: 0.0,
+            t_max: 0.0,
+        };
+
+        if self.brake.duration > 0.0 && self.brake.t[0] > 0.0 {
+            Self::check_step_for_velocity_extremum(
+                0.0,
+                self.brake.t[0],
+                self.brake.v[0],
+                self.brake.a[0],
+                self.brake.j[0],
+                &mut extrema,
+            );
+            if self.brake.t[1] > 0.0 {
+                Self::check_step_for_velocity_extremum(
+                    self.brake.t[0],
+                    self.brake.t[1],
+                    self.brake.v[1],
+                    self.brake.a[1],
+                    self.brake.j[1],
+                    &mut extrema,
+                );
+            }
+        }
+
+        let mut t_current_sum = 0.0;
+        for i in 0..7 {
+            if i > 0 {
+                t_current_sum = self.t_sum[i - 1];
+            }
+            Self::check_step_for_velocity_extremum(
+                t_current_sum + self.brake.duration,
+                self.t[i],
+                self.v[i],
+                self.a[i],
+                self.j[i],
+                &mut extrema,
+            );
+        }
+
+        // The end of the profile, and of the linear motion after it
+        let t_end = self.total_duration();
+        Self::check_step_for_velocity_extremum(t_end, 0.0, self.v[7], 0.0, 0.0, &mut extrema);
+        if duration > t_end {
+            let (_, v_end) = self.state_after(duration);
+            Self::check_step_for_velocity_extremum(duration, 0.0, v_end, 0.0, 0.0, &mut extrema);
         }
 
         extrema

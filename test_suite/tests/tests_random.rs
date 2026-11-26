@@ -610,6 +610,88 @@ fn random_position_3_limits_and_extrema() {
     assert_eq!(checked, count, "too few valid random inputs");
 }
 
+/// The velocity extrema of a section bound every velocity sampled within it
+/// and are attained at their reported times - with brake pre-trajectories and
+/// with DoFs that finish before the trajectory does
+#[test]
+fn random_position_3_velocity_extrema() {
+    let mut generate = generate_position::<3>(64);
+
+    let mut otg = Ruckig::<3, ThrowErrorHandler>::new(None, DELTA_TIME);
+    let mut traj = Trajectory::new(None);
+    let mut input = InputParameter::new(None);
+
+    let count = number_of_trajectories(0.125);
+    let (mut checked, mut with_brake, mut with_tail) = (0, 0, 0);
+    for i in 0..256 * count {
+        if checked == count {
+            break;
+        }
+        generate(&mut input);
+        input.synchronization = if i % 2 == 0 {
+            Synchronization::None
+        } else {
+            Synchronization::Time
+        };
+        if !check_calculation(&mut otg, &input, &mut traj) {
+            continue;
+        }
+        checked += 1;
+
+        let duration = traj.get_duration();
+        let extrema: [_; 3] = core::array::from_fn(|dof| traj.get_velocity_extrema(0, dof).unwrap());
+        for (dof, profile) in traj.get_profiles()[0].iter().enumerate() {
+            with_brake += usize::from(profile.brake.duration > 0.0);
+            with_tail += usize::from(profile.total_duration() < duration - 1e-3);
+
+            // Neither tighter nor wider than the profile-local extrema
+            let local = profile.get_velocity_extrema_until(duration);
+            assert_eq!((local.min, local.max), (extrema[dof].min, extrema[dof].max));
+        }
+
+        const STEPS: usize = 400;
+        for step in 0..=STEPS {
+            let time = duration * step as f64 / STEPS as f64;
+            let [_, velocity, _] = sample(&traj, time);
+            for dof in 0..3 {
+                assert!(
+                    extrema[dof].min - 1e-9 <= velocity[dof] && velocity[dof] <= extrema[dof].max + 1e-9,
+                    "velocity {} of DoF {dof} at t = {time} outside the extrema [{}, {}], input: {input}",
+                    velocity[dof],
+                    extrema[dof].min,
+                    extrema[dof].max
+                );
+            }
+        }
+
+        for dof in 0..3 {
+            // The extrema are attained at their reported times
+            let [_, at_min, _] = sample(&traj, extrema[dof].t_min);
+            let [_, at_max, _] = sample(&traj, extrema[dof].t_max);
+            assert!(
+                (at_min[dof] - extrema[dof].min).abs() < 1e-9
+                    && (at_max[dof] - extrema[dof].max).abs() < 1e-9,
+                "velocity extrema of DoF {dof} are not attained at their times, input: {input}"
+            );
+            assert!(
+                (0.0..=duration).contains(&extrema[dof].t_min)
+                    && (0.0..=duration).contains(&extrema[dof].t_max),
+                "times of the velocity extrema of DoF {dof} outside the trajectory, input: {input}"
+            );
+
+            // The initial state is part of the interval
+            assert!(extrema[dof].min <= input.current_velocity[dof]);
+            assert!(extrema[dof].max >= input.current_velocity[dof]);
+        }
+
+        assert!(traj.get_velocity_extrema(1, 0).is_none());
+        assert!(traj.get_velocity_extrema(0, 3).is_none());
+    }
+    assert_eq!(checked, count, "too few valid random inputs");
+    assert!(with_brake > 0, "no brake pre-trajectory was covered");
+    assert!(with_tail > 0, "no DoF finishing before the trajectory was covered");
+}
+
 /// `get_first_time_at_position` returns a time at which the position is
 /// actually reached, and no earlier sample has crossed it
 #[test]
