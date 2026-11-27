@@ -723,3 +723,19 @@ fn test_randomized_waypoint_chains() {
         }
     }
 }
+
+#[test]
+fn phase_outcome_is_recorded_for_each_waypoint_section() {
+    let mut planner = Ruckig::<0, ThrowErrorHandler>::new(Some(2), 0.01);
+    let mut input = basic_input(2);
+    input.synchronization = Synchronization::Phase;
+    input.target_position[0] = 2.0;
+    input.target_position[1] = 1.0;
+    let mut trajectory = Trajectory::new(Some(2));
+    planner.calculate(&input, &mut trajectory).unwrap();
+    assert_eq!(trajectory.phase_synchronized_sections(), &[true]);
+    push_waypoint(&mut input, &[1.0, 0.5]);
+    input.per_section_minimum_duration = Some(vec![4.0, 4.0]);
+    planner.calculate(&input, &mut trajectory).unwrap();
+    assert_eq!(trajectory.phase_synchronized_sections(), &[false, false]);
+}

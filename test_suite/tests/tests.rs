@@ -1325,3 +1325,61 @@ fn test_time_reset_on_retarget() {
     let elapsed = cycles as f64 * dt;
     assert_float_eq!(elapsed, output.trajectory.get_duration(), abs <= 2.0 * dt);
 }
+
+#[test]
+fn phase_synchronization_reports_retained_profiles() {
+    let mut planner = Ruckig::<2, IgnoreErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    input.synchronization = Synchronization::Phase;
+    input.target_position = daov_stack![1.0, 0.4];
+    input.max_velocity = daov_stack![0.8, 0.8];
+    input.max_acceleration = daov_stack![1.0, 1.0];
+    input.max_jerk = daov_stack![2.0, 2.0];
+    let mut trajectory = Trajectory::new(None);
+
+    assert_eq!(
+        planner.calculate(&input, &mut trajectory).unwrap(),
+        RuckigResult::Working
+    );
+    assert_eq!(trajectory.phase_synchronized_sections(), &[true]);
+    input.minimum_duration = Some(4.0);
+    assert_eq!(
+        planner.calculate(&input, &mut trajectory).unwrap(),
+        RuckigResult::Working
+    );
+    assert_eq!(trajectory.phase_synchronized_sections(), &[false]);
+    input.minimum_duration = None;
+    input.current_velocity = daov_stack![0.0, 0.3];
+    assert_eq!(
+        planner.calculate(&input, &mut trajectory).unwrap(),
+        RuckigResult::Working
+    );
+    assert_eq!(trajectory.phase_synchronized_sections(), &[false]);
+}
+
+#[test]
+fn mixed_synchronization_is_not_reported_as_shared_phase() {
+    let mut planner = Ruckig::<3, IgnoreErrorHandler>::new(None, 0.01);
+    let mut input = InputParameter::new(None);
+    input.target_position = daov_stack![1.0, 0.4, 0.2];
+    input.max_velocity = daov_stack![0.8, 0.8, 0.8];
+    input.max_acceleration = daov_stack![1.0, 1.0, 1.0];
+    input.max_jerk = daov_stack![2.0, 2.0, 2.0];
+    let mut trajectory = Trajectory::new(None);
+    for synchronization in [
+        Synchronization::Time,
+        Synchronization::TimeIfNecessary,
+        Synchronization::None,
+    ] {
+        input.per_dof_synchronization = Some(DataArrayOrVec::Stack([
+            Synchronization::Phase,
+            Synchronization::Phase,
+            synchronization,
+        ]));
+        assert_eq!(
+            planner.calculate(&input, &mut trajectory).unwrap(),
+            RuckigResult::Working
+        );
+        assert_eq!(trajectory.phase_synchronized_sections(), &[false]);
+    }
+}

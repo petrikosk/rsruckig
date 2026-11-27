@@ -671,6 +671,20 @@ against following versions
 Rust version is a port of the original C++ community version, excluding the cloud client. Three Ruckig Pro features -
 position limits, the tracking interface and intermediate waypoints - are implemented independently in this port.
 
+### Changes in 3.3.0
+
+- New: `Trajectory::phase_synchronized_sections()` reports for each section whether the solver kept the shared phase
+  profile requested with `Synchronization::Phase`, i.e. whether the section is a straight-line motion
+  ([#19](https://github.com/petrikosk/rsruckig/pull/19), contributed by
+  [Kingston Kuan](https://github.com/kstonekuan)). Phase synchronization silently falls back to time synchronization
+  when a shared profile is not possible (e.g. non-collinear velocities, a `minimum_duration` that stretches the
+  motion, or limits of another DoF); the calculation still succeeds, and the caller can now detect the fallback. The
+  result is conservative: `true` requires every enabled DoF to request phase synchronization and no brake
+  pre-trajectory. With intermediate waypoints the sections are currently never phase synchronized, as the
+  pass-through states of the waypoints are chosen per DoF.
+
+No existing API or result changes.
+
 ### Changes in 3.2.0
 
 - New: `Trajectory::get_velocity_extrema(section, dof)` returns the minimum and maximum velocity of a DoF within a

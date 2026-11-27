@@ -51,7 +51,7 @@ pub enum ControlInterface {
 /// Controls how multiple degrees of freedom are synchronized during trajectory generation:
 /// - Time: All DoFs reach the target at the same time (default)
 /// - TimeIfNecessary: Only synchronize if required by other constraints
-/// - Phase: All DoFs follow the same phase profile (results in straight-line motions)
+/// - Phase: Attempt a shared phase profile, falling back to time synchronization if needed
 /// - None: Each DoF follows its own independent time-optimal profile
 ///
 /// # Example
@@ -79,7 +79,7 @@ pub enum Synchronization {
     /// Only synchronize DoFs if required by other constraints
     TimeIfNecessary,
 
-    /// All DoFs follow the same phase profile (results in straight-line motions)
+    /// Attempt a shared phase profile, falling back to time synchronization if needed
     Phase,
 
     /// Each DoF follows its own time-optimal profile independently

@@ -646,6 +646,7 @@ impl<const DOF: usize> WaypointsCalculator<DOF> {
             traj.profiles[section][dof] = profile;
             self.section_min_durations[section][dof] = solved.independent_min_durations[dof];
         }
+        traj.phase_synchronized_sections[section] = solved.phase_synchronized_sections[0];
         self.section_durations[section] = solved.duration;
     }
 

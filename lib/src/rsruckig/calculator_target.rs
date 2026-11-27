@@ -956,6 +956,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
 
             if self.repair_profile_step2(dof, inp, duration, &mut profile) {
                 traj.profiles[0][dof] = profile;
+                traj.phase_synchronized_sections[0] = false;
                 continue;
             }
 
@@ -1021,6 +1022,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         // A state-to-state trajectory has exactly one section; shrink a
         // trajectory that previously held intermediate waypoints
         traj.resize_sections(1);
+        traj.phase_synchronized_sections[0] = false;
 
         self.resolve_input(inp);
 
@@ -1094,6 +1096,7 @@ impl<const DOF: usize> TargetCalculator<DOF> {
         // Repeated only if step 2 disproves a duration that step 1 considered
         // feasible, with that duration blocked (at most twice per DoF)
         'synchronization: loop {
+            traj.phase_synchronized_sections[0] = false;
             let mut limiting_dof: Option<usize> = None; // The DoF that doesn't need step 2
             let found_synchronization = self.synchronize(
                 inp.minimum_duration,
@@ -1189,6 +1192,14 @@ impl<const DOF: usize> TargetCalculator<DOF> {
                                 matches!(s, Synchronization::Phase | Synchronization::None)
                             })
                         {
+                            traj.phase_synchronized_sections[0] =
+                                (0..self.degrees_of_freedom).all(|dof| {
+                                    !inp.enabled[dof]
+                                        || (self.inp_per_dof_synchronization[dof]
+                                            == Synchronization::Phase
+                                            && traj.profiles[0][dof].brake.duration == 0.0
+                                            && traj.profiles[0][dof].accel.duration == 0.0)
+                                });
                             return Ok(Some(RuckigResult::Working));
                         }
                     }
