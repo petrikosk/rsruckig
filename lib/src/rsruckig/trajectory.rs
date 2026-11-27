@@ -42,6 +42,7 @@ pub struct Trajectory<const DOF: usize> {
     /// Minimum duration each DoF would need on its own, without
     /// synchronization to the other DoFs
     pub independent_min_durations: DataArrayOrVec<f64, DOF>,
+    pub(crate) phase_synchronized_sections: Vec<bool>,
     position_extrema: DataArrayOrVec<Bound, DOF>,
     degrees_of_freedom: usize,
 }
@@ -52,6 +53,7 @@ impl<const DOF: usize> Default for Trajectory<DOF> {
             profiles: vec![DataArrayOrVec::new(None, Profile::default())],
             duration: Default::default(),
             cumulative_times: vec![0.0],
+            phase_synchronized_sections: vec![false],
             independent_min_durations: DataArrayOrVec::new(None, 0.0),
             position_extrema: DataArrayOrVec::new(None, Bound::default()),
             degrees_of_freedom: DOF,
@@ -72,6 +74,7 @@ impl<const DOF: usize> Trajectory<DOF> {
             )],
             duration: 0.0,
             cumulative_times: vec![0.0],
+            phase_synchronized_sections: vec![false],
             independent_min_durations: DataArrayOrVec::new(dofs, 0.0),
             position_extrema: DataArrayOrVec::new(dofs, Bound::default()),
             degrees_of_freedom: dofs.unwrap_or(DOF),
@@ -88,6 +91,7 @@ impl<const DOF: usize> Trajectory<DOF> {
         self.profiles
             .resize_with(sections, || DataArrayOrVec::new(dofs, Profile::default()));
         self.cumulative_times.resize(sections, 0.0);
+        self.phase_synchronized_sections.resize(sections, false);
     }
 
     /// Pre-allocate storage for a trajectory with up to `sections` sections
@@ -96,6 +100,10 @@ impl<const DOF: usize> Trajectory<DOF> {
     pub fn reserve_sections(&mut self, sections: usize) {
         if sections > self.profiles.len() {
             self.profiles.reserve(sections - self.profiles.len());
+        }
+        if sections > self.phase_synchronized_sections.len() {
+            self.phase_synchronized_sections
+                .reserve(sections - self.phase_synchronized_sections.len());
         }
         if sections > self.cumulative_times.len() {
             self.cumulative_times
@@ -333,11 +341,26 @@ impl<const DOF: usize> Trajectory<DOF> {
         for (profiles, other_profiles) in self.profiles.iter_mut().zip(&other.profiles) {
             profiles.copy_from(other_profiles);
         }
+        self.phase_synchronized_sections
+            .copy_from_slice(&other.phase_synchronized_sections);
         self.duration = other.duration;
-        self.cumulative_times.copy_from_slice(&other.cumulative_times);
+        self.cumulative_times
+            .copy_from_slice(&other.cumulative_times);
         self.independent_min_durations
             .copy_from(&other.independent_min_durations);
         self.position_extrema.copy_from(&other.position_extrema);
+    }
+
+    /// Whether the solver retained a shared phase profile for each section.
+    ///
+    /// A false value means phase synchronization was not established by the
+    /// solver, including when it was not requested or time synchronization was
+    /// used instead. True requires every enabled DoF to request phase
+    /// synchronization and have no brake or acceleration pre-trajectory. This
+    /// reports the solver outcome, not a geometric collision-safety guarantee.
+    /// Results are meaningful after a successful calculation.
+    pub fn phase_synchronized_sections(&self) -> &[bool] {
+        &self.phase_synchronized_sections
     }
 
     /// The profiles of all sections, indexed as `[section][dof]`

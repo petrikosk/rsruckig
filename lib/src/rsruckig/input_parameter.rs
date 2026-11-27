@@ -51,7 +51,7 @@ pub enum ControlInterface {
 /// Controls how multiple degrees of freedom are synchronized during trajectory generation:
 /// - Time: All DoFs reach the target at the same time (default)
 /// - TimeIfNecessary: Only synchronize if required by other constraints
-/// - Phase: Attempt a shared phase profile for straight-line motion, falling back to time synchronization by default
+/// - Phase: Attempt a shared phase profile, falling back to time synchronization if needed
 /// - None: Each DoF follows its own independent time-optimal profile
 ///
 /// # Example
@@ -79,7 +79,7 @@ pub enum Synchronization {
     /// Only synchronize DoFs if required by other constraints
     TimeIfNecessary,
 
-    /// Attempt a shared phase profile for straight-line motion, falling back to time synchronization by default
+    /// Attempt a shared phase profile, falling back to time synchronization if needed
     Phase,
 
     /// Each DoF follows its own time-optimal profile independently
@@ -153,11 +153,6 @@ pub struct InputParameter<const DOF: usize> {
     pub control_interface: ControlInterface,
     /// Synchronization behavior between multiple DoFs
     pub synchronization: Synchronization,
-    /// Allow the solver to switch to time synchronization when phase synchronization
-    /// was requested. Set to false to report a synchronization calculation error
-    /// if the solver would time-synchronize an enabled phase axis. This controls
-    /// solver fallback, including within waypoint sections.
-    pub allow_phase_fallback: bool,
     /// Whether the duration should be a discrete multiple of the control cycle
     pub duration_discretization: DurationDiscretization,
     /// Current position for each DoF
@@ -245,7 +240,6 @@ impl<const DOF: usize> PartialEq for InputParameter<DOF> {
             && self.min_position == other.min_position
             && self.control_interface == other.control_interface
             && self.synchronization == other.synchronization
-            && self.allow_phase_fallback == other.allow_phase_fallback
             && self.duration_discretization == other.duration_discretization
             && self.per_dof_control_interface == other.per_dof_control_interface
             && self.per_dof_synchronization == other.per_dof_synchronization
@@ -289,7 +283,6 @@ impl<const DOF: usize> InputParameter<DOF> {
         self.degrees_of_freedom = other.degrees_of_freedom;
         self.control_interface = other.control_interface;
         self.synchronization = other.synchronization;
-        self.allow_phase_fallback = other.allow_phase_fallback;
         self.duration_discretization = other.duration_discretization.clone();
 
         self.current_position.copy_from(&other.current_position);
@@ -409,7 +402,6 @@ impl<const DOF: usize> InputParameter<DOF> {
             degrees_of_freedom: dofs.unwrap_or(DOF),
             control_interface: ControlInterface::Position,
             synchronization: Synchronization::Time,
-            allow_phase_fallback: true,
             duration_discretization: DurationDiscretization::Continuous,
             current_position: DataArrayOrVec::new(dofs, 0.0),
             current_velocity: DataArrayOrVec::new(dofs, 0.0),
